@@ -152,12 +152,15 @@ export function buildArena(scene) {
     block(-H + 0.35, i, 0.7, 8.5, 1.2, darkMat);
     block(H - 0.35, i, 0.7, 8.5, 1.2, darkMat);
   }
+  // Зубцы на стенах — один InstancedMesh вместо десятков отдельных объектов (быстрее на телефоне)
+  const merlons = [];
   for (let i = -19; i <= 19; i += 2.5) {
-    block(i, -H - 0.5, 1, 1, 1, darkMat, false, WH);
-    block(i, H + 0.5, 1, 1, 1, darkMat, false, WH);
-    block(-H - 0.5, i, 1, 1, 1, darkMat, false, WH);
-    block(H + 0.5, i, 1, 1, 1, darkMat, false, WH);
+    merlons.push([i, -H - 0.5], [i, H + 0.5], [-H - 0.5, i], [H + 0.5, i]);
   }
+  const merlonMesh = new THREE.InstancedMesh(boxGeo(1, 1, 1), darkMat, merlons.length);
+  const mtx = new THREE.Matrix4();
+  merlons.forEach(([x, z], i) => merlonMesh.setMatrixAt(i, mtx.makeTranslation(x, WH + 0.5, z)));
+  scene.add(merlonMesh);
 
   // --- Шпили снаружи арены (декорация, видны сквозь туман) ---
   const spireMat = new THREE.MeshLambertMaterial({ color: 0x2a2020 });
@@ -192,16 +195,18 @@ export function buildArena(scene) {
   block(-16, 4, 1.4, 1.4, 1.4, crateMat);
   block(5, -5, 1.2, 1.0, 1.2, crateMat);
 
-  // Мелкий мусор на полу (без столкновений)
-  const rubbleGeo = new THREE.BoxGeometry(1, 1, 1);
+  // Мелкий мусор на полу (без столкновений, тоже одним InstancedMesh)
+  const rubble = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), darkMat, 40);
+  const dummy = new THREE.Object3D();
   for (let i = 0; i < 40; i++) {
-    const r = new THREE.Mesh(rubbleGeo, darkMat);
     const s = 0.15 + Math.random() * 0.35;
-    r.scale.set(s * (1 + Math.random()), s, s * (1 + Math.random()));
-    r.position.set((Math.random() - 0.5) * 38, s / 2 - 0.05, (Math.random() - 0.5) * 38);
-    r.rotation.set(Math.random(), Math.random() * 3, Math.random() * 0.5);
-    scene.add(r);
+    dummy.scale.set(s * (1 + Math.random()), s, s * (1 + Math.random()));
+    dummy.position.set((Math.random() - 0.5) * 38, s / 2 - 0.05, (Math.random() - 0.5) * 38);
+    dummy.rotation.set(Math.random() * 0.5, Math.random() * 3, Math.random() * 0.5);
+    dummy.updateMatrix();
+    rubble.setMatrixAt(i, dummy.matrix);
   }
+  scene.add(rubble);
 
   // Точки появления врагов — у краёв арены
   const spawnPoints = [

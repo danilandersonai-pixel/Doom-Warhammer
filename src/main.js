@@ -70,7 +70,6 @@ const ndc = new THREE.Vector2();
 const muzzleWorld = new THREE.Vector3();
 const tmp = new THREE.Vector3();
 let muzzleT = 0;
-let fpsN = 0;
 
 function shoot() {
   sfx.shoot();
@@ -256,7 +255,6 @@ function update(dt) {
 
 function frame() {
   requestAnimationFrame(frame);
-  fpsN++;
   const dt = Math.min(clock.getDelta(), 0.05); // не даём шагу стать огромным после паузы
   game.time += dt;
 
@@ -279,8 +277,5 @@ function frame() {
 player.applyCamera(camera, 0);
 frame();
 
-// Для отладки из консоли браузера
-window.__cam = camera;
-window.__game = { game, player, enemies, waves, weapon, input, update };
-let fpsT = performance.now();
-setInterval(() => { const n = performance.now(); window.__game.fps = Math.round(fpsN * 1000 / (n - fpsT)); fpsN = 0; fpsT = n; }, 1000);
+// Для отладки из консоли браузера (например: __game.player.health = 100)
+window.__game = { game, player, enemies, waves, weapon, input, camera, update };
