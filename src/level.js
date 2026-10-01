@@ -17,6 +17,14 @@ function boxGeo(w, h, d, texScale) {
     const k = f * 4 + i;
     uv.setXY(k, (uv.getX(k) * dims[f][0]) / texScale, (uv.getY(k) * dims[f][1]) / texScale);
   }
+  // затемнение у основания (дешёвая "окклюзия"): низ боковых граней темнее
+  const pos = g.attributes.position, col = [];
+  for (let i = 0; i < pos.count; i++) {
+    const t = (pos.getY(i) + h / 2) / h;
+    const k = h > 0.6 ? 0.55 + 0.45 * Math.min(1, t * 1.6) : 0.8 + 0.2 * t;
+    col.push(k, k, k * 1.04);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return g;
 }
 
@@ -33,8 +41,30 @@ export function buildLevel(scene, world) {
   const capMat = M.snow; // снег на верхушках
 
   // Блок: меш + коллайдер. top — материал верхней грани (снег), texScale — метров на повтор
+  // материалы с учётом цвета вершин (для затемнения у основания)
+  const aoCache = new Map();
+  const ao = (m) => { if (!aoCache.has(m)) { const c = m.clone(); c.vertexColors = true; aoCache.set(m, c); } return aoCache.get(m); };
+  // мягкая тень-пятно под предметом
+  const shadowTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 8, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(20,26,40,0.55)'); gr.addColorStop(1, 'rgba(20,26,40,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+  const shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  function contactShadow(x, z, w, d, y = 0, rotY = 0) {
+    const s = new THREE.Mesh(shadowGeo, shadowMat);
+    s.scale.set(w + 1.4, 1, d + 1.4);
+    s.position.set(x, y + 0.012, z);
+    s.rotation.y = rotY;
+    scene.add(s);
+  }
+
   function block(x, z, w, d, y0, h, m, { top = capMat, texScale = 2, collide = true, ray = true, rotY = 0 } = {}) {
-    const mats = [m, m, top || m, m, m, m];
+    const mats = [ao(m), ao(m), ao(top || m), ao(m), ao(m), ao(m)];
+    if (collide && h > 0.5 && w < 8 && d < 8) contactShadow(x, z, w, d, y0, rotY);
     const mesh = new THREE.Mesh(boxGeo(w, h, d, texScale), mats);
     mesh.position.set(x, y0 + h / 2, z);
     mesh.rotation.y = rotY;
@@ -86,8 +116,8 @@ export function buildLevel(scene, world) {
   disc.lookAt(0, 0, 0);
   scene.add(disc);
 
-  scene.add(new THREE.HemisphereLight(0xe6eef9, 0x8890a2, 1.05));
-  const sun = new THREE.DirectionalLight(0xfff4e2, 0.95);
+  scene.add(new THREE.HemisphereLight(0xdfe9f7, 0x4a5262, 0.95));
+  const sun = new THREE.DirectionalLight(0xffe4bc, 1.5);
   sun.position.set(30, 50, -40);
   scene.add(sun);
 
@@ -259,6 +289,7 @@ export function buildLevel(scene, world) {
     solid.push(m);
     const vertical = Math.abs(Math.sin(rotY)) > 0.5;
     world.box(x, z, vertical ? 0.6 : 2.6, vertical ? 2.6 : 0.6, 0, 2.0);
+    contactShadow(x, z, 2.6, 0.6, 0, rotY);
     // снежный налёт на верхушке
     const cap = new THREE.Mesh(boxGeo(1.75, 0.08, 0.56, 2), M.snow);
     cap.position.set(x, 2.03, z);

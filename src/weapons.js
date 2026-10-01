@@ -257,7 +257,7 @@ export class Weapons {
   // Брызги крови на экране
   splatterScreen(n) {
     for (let i = 0; i < n; i++) {
-      const big = i < 3;
+      const big = i < Math.max(3, n / 3);
       this.screenBlood.push({
         x: 0.15 + Math.random() * 0.7, y: 0.15 + Math.random() * 0.65,
         s: big ? 1.4 + Math.random() * 1.6 : 0.35 + Math.random() * 0.6,   // масштаб кляксы

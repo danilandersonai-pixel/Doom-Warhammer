@@ -10,7 +10,7 @@ const M = {
   casing: ramp('#a01e24', { spread: 0.45 }),
   olive: ramp('#5d6448', { spread: 0.42 }),
   glove: ramp('#6f7a8c', { spread: 0.48 }),
-  blood: ramp('#d0141c', { spread: 0.4 }),
+  blood: ramp('#e21b22', { spread: 0.4 }),
   meat: ramp('#b8343a', { spread: 0.45 }),
   bone: ramp('#e6dcc4', { spread: 0.4 }),
   lime: [hex('#2a4006'), hex('#5a8a0a'), hex('#9cd010'), hex('#d4ff40'), hex('#f8ffd0')],

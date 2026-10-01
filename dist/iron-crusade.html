@@ -486,6 +486,8 @@ class Mask {
 // ---------- Холст спрайта ----------
 class Pix {
   static dither = 0.6; // сила дизеринга по умолчанию (оружие рисуем с меньшей)
+  static rim = false;  // светлая кромка на гранях, обращённых к свету
+  static shine = 0;    // >0 — яркие блики там, где поверхность смотрит прямо на свет
   constructor(w, h) {
     this.w = w;
     this.h = h;
@@ -527,7 +529,7 @@ class Pix {
   // Залить маску материалом с объёмным затенением.
   // round — "толщина" скругления в пикселях (больше — мягче объём), grad — верх светлее низа,
   // tex(x,y) — добавка к тону (царапины, складки), contour — тёмная кромка там, где деталь лежит поверх другой.
-  fill(mask, rmp, { round = 3, grad = 0.25, bias = 0, dither = Pix.dither, contour = true, tilt = 1.8, tex = null, flat = false } = {}) {
+  fill(mask, rmp, { round = 3, grad = 0.25, bias = 0, dither = Pix.dither, contour = true, tilt = 1.8, tex = null, flat = false, rim = Pix.rim, shine = Pix.shine } = {}) {
     const { w, h } = this, M = mask.m, n = rmp.length;
     // 1) расстояние до края маски (два прохода "шахматным" способом)
     const D = new Float32Array(w * h);
@@ -581,7 +583,15 @@ class Pix {
           if (outside && this.alpha(xx, yy) > 0) { idx = dx < 0 || dy < 0 ? Math.min(idx, 1) : 0; break; }
         }
       }
-      this.set(x, y, rmp[idx]);
+      // светлая кромка: край, обращённый к свету (сверху/слева пусто или другая деталь)
+      if (rim && idx > 0) {
+        const outUp = y === 0 || !M[(y - 1) * w + x], outLeft = x === 0 || !M[y * w + x - 1];
+        if (outUp || outLeft) idx = Math.min(n - 1, idx + 1);
+      }
+      let col = rmp[idx];
+      // блик: почти белый пиксель на самых освещённых местах
+      if (shine && v > 1 - shine * 0.25 && ((x + y) & 1) === 0) col = col.map((c) => Math.min(255, c + (255 - c) * 0.6));
+      this.set(x, y, col);
     }
     return this;
   }
@@ -721,7 +731,8 @@ function snow() {
   for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
     const v = fbm(n, x / 32, y / 32);
     const ripple = Math.sin((x * 0.06 + y * 0.11) + fbm(n, x / 64 + 9, y / 64) * 6) * 0.5 + 0.5; // рябь от ветра
-    let c = mix(shadow, base, clamp(v * 1.3 - 0.1 + ripple * 0.25, 0, 1));
+    const big = fbm(n, x / 90 + 17, y / 90 + 3, 2);
+    let c = mix(shadow, base, clamp(v * 1.5 - 0.25 + ripple * 0.25 + (big - 0.5) * 0.9, 0, 1));
     if (ripple > 0.9) c = mix(c, bright, 0.6);
     const q = Math.round((c[0] - 180) / 8) * 8 + 180; // мягкая постеризация — пиксельные пятна
     T.set(x, y, clamp(q), clamp(c[1] + (q - c[0])), clamp(c[2] + (q - c[0])));
@@ -1458,7 +1469,7 @@ const M = {
   casing: ramp('#a01e24', { spread: 0.45 }),
   olive: ramp('#5d6448', { spread: 0.42 }),
   glove: ramp('#6f7a8c', { spread: 0.48 }),
-  blood: ramp('#d0141c', { spread: 0.4 }),
+  blood: ramp('#e21b22', { spread: 0.4 }),
   meat: ramp('#b8343a', { spread: 0.45 }),
   bone: ramp('#e6dcc4', { spread: 0.4 }),
   lime: [hex('#2a4006'), hex('#5a8a0a'), hex('#9cd010'), hex('#d4ff40'), hex('#f8ffd0')],
@@ -1789,6 +1800,14 @@ function boxGeo(w, h, d, texScale) {
     const k = f * 4 + i;
     uv.setXY(k, (uv.getX(k) * dims[f][0]) / texScale, (uv.getY(k) * dims[f][1]) / texScale);
   }
+  // затемнение у основания (дешёвая "окклюзия"): низ боковых граней темнее
+  const pos = g.attributes.position, col = [];
+  for (let i = 0; i < pos.count; i++) {
+    const t = (pos.getY(i) + h / 2) / h;
+    const k = h > 0.6 ? 0.55 + 0.45 * Math.min(1, t * 1.6) : 0.8 + 0.2 * t;
+    col.push(k, k, k * 1.04);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   return g;
 }
 
@@ -1805,8 +1824,30 @@ function buildLevel(scene, world) {
   const capMat = M.snow; // снег на верхушках
 
   // Блок: меш + коллайдер. top — материал верхней грани (снег), texScale — метров на повтор
+  // материалы с учётом цвета вершин (для затемнения у основания)
+  const aoCache = new Map();
+  const ao = (m) => { if (!aoCache.has(m)) { const c = m.clone(); c.vertexColors = true; aoCache.set(m, c); } return aoCache.get(m); };
+  // мягкая тень-пятно под предметом
+  const shadowTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 8, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(20,26,40,0.55)'); gr.addColorStop(1, 'rgba(20,26,40,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1 });
+  const shadowGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  function contactShadow(x, z, w, d, y = 0, rotY = 0) {
+    const s = new THREE.Mesh(shadowGeo, shadowMat);
+    s.scale.set(w + 1.4, 1, d + 1.4);
+    s.position.set(x, y + 0.012, z);
+    s.rotation.y = rotY;
+    scene.add(s);
+  }
+
   function block(x, z, w, d, y0, h, m, { top = capMat, texScale = 2, collide = true, ray = true, rotY = 0 } = {}) {
-    const mats = [m, m, top || m, m, m, m];
+    const mats = [ao(m), ao(m), ao(top || m), ao(m), ao(m), ao(m)];
+    if (collide && h > 0.5 && w < 8 && d < 8) contactShadow(x, z, w, d, y0, rotY);
     const mesh = new THREE.Mesh(boxGeo(w, h, d, texScale), mats);
     mesh.position.set(x, y0 + h / 2, z);
     mesh.rotation.y = rotY;
@@ -1858,8 +1899,8 @@ function buildLevel(scene, world) {
   disc.lookAt(0, 0, 0);
   scene.add(disc);
 
-  scene.add(new THREE.HemisphereLight(0xe6eef9, 0x8890a2, 1.05));
-  const sun = new THREE.DirectionalLight(0xfff4e2, 0.95);
+  scene.add(new THREE.HemisphereLight(0xdfe9f7, 0x4a5262, 0.95));
+  const sun = new THREE.DirectionalLight(0xffe4bc, 1.5);
   sun.position.set(30, 50, -40);
   scene.add(sun);
 
@@ -2031,6 +2072,7 @@ function buildLevel(scene, world) {
     solid.push(m);
     const vertical = Math.abs(Math.sin(rotY)) > 0.5;
     world.box(x, z, vertical ? 0.6 : 2.6, vertical ? 2.6 : 0.6, 0, 2.0);
+    contactShadow(x, z, 2.6, 0.6, 0, rotY);
     // снежный налёт на верхушке
     const cap = new THREE.Mesh(boxGeo(1.75, 0.08, 0.56, 2), M.snow);
     cap.position.set(x, 2.03, z);
@@ -2678,8 +2720,10 @@ function createFX(scene) {
   };
   // Фонтан крови: крупные и мелкие капли разного размера + кусок-другой
   fx.bloodBurst = (p, amount = 1, dir = null) => {
-    fx.blood.burst(p, Math.round(26 * amount), 0xd0141c, { speed: 6, life: 0.9, gravity: 14, size: 0.09, sizeVar: 1.4, dir, spread: 0.9 });
-    fx.blood.burst(p, Math.round(8 * amount), 0xff4a50, { speed: 3, life: 0.6, gravity: 10, size: 0.2, sizeVar: 1, alpha: 0.75, dir });
+    // крупные насыщенные капли, полупрозрачные розоватые облачка и светлые кусочки плоти
+    fx.blood.burst(p, Math.round(34 * amount), 0xe21b22, { speed: 7, life: 1.0, gravity: 14, size: 0.12, sizeVar: 1.6, dir, spread: 1 });
+    fx.blood.burst(p, Math.round(12 * amount), 0xff5a64, { speed: 3.5, life: 0.7, gravity: 6, size: 0.42, sizeVar: 1, alpha: 0.55, dir });
+    fx.blood.burst(p, Math.round(6 * amount), 0xffe0c8, { speed: 5, life: 0.8, gravity: 12, size: 0.11, sizeVar: 0.8, dir, up: 0.5 });
   };
   return fx;
 }
@@ -3315,6 +3359,7 @@ function weaponSprites() {
   if (cache) return cache;
   const prevDither = Pix.dither;
   Pix.dither = 0.22; // на оружии тона ровнее, как в эталоне
+  Pix.rim = true; Pix.shine = 0.5; // светлые кромки и блики на металле
   const rifleIdle = drawRifle();
   const shotIdle = drawShotgun();
   cache = {
@@ -3344,6 +3389,7 @@ function weaponSprites() {
   cache.flash = cache.flash.map((f) => f.toCanvas());
   cache.flashBlue = cache.flashBlue.toCanvas();
   Pix.dither = prevDither;
+  Pix.rim = false; Pix.shine = 0;
   return cache;
 }
 
@@ -3842,7 +3888,7 @@ class Weapons {
   // Брызги крови на экране
   splatterScreen(n) {
     for (let i = 0; i < n; i++) {
-      const big = i < 3;
+      const big = i < Math.max(3, n / 3);
       this.screenBlood.push({
         x: 0.15 + Math.random() * 0.7, y: 0.15 + Math.random() * 0.65,
         s: big ? 1.4 + Math.random() * 1.6 : 0.35 + Math.random() * 0.6,   // масштаб кляксы
@@ -3871,13 +3917,14 @@ class Weapons {
 
     // смещения: покачивание, отдача, смена, перезарядка
     const bob = P.speed01 * (P.onGround ? 1 : 0.3);
-    let x = OW / 2 - 96 + 34 + Math.cos(P.bob) * 5 * bob;
-    let y = OH - 144 + 22 + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
+    let x = OW / 2 - 96 + 58 + Math.cos(P.bob) * 5 * bob;
+    let y = OH - 144 + 14 + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
     y += this.switchT * 150;
-    let rot = 0;
+    // лёгкий наклон: оружие держат по диагонали, ствол смотрит в центр экрана
+    let rot = k === 'chainblade' ? 0 : -0.13;
     if (this.reloadT > 0 && k !== 'shotgun') {
       const p = 1 - this.reloadT / this.def.reload, s = Math.sin(p * Math.PI);
-      y += s * 46; rot = -s * 0.35;
+      y += s * 46; rot = -0.13 - s * 0.35;
     }
     if (k === 'shotgun' && this.reloadT > 0) y += Math.sin((1 - this.reloadT / this.def.reload) * Math.PI) * 18;
     // в прыжке оружие чуть "отстаёт"
@@ -3890,10 +3937,10 @@ class Weapons {
       frame = this.spr.chainblade[name || 'idle'];
       if (!name) y += (this.swingT - 0.28) * 300;
       if (k !== 'chainblade' && !name) frame = null;
-      x = OW / 2 - 96 + 34; rot = 0;
-      if (k !== 'chainblade') y = OH - 144 + 22;
+      x = OW / 2 - 96 + 58; rot = 0;
+      if (k !== 'chainblade') y = OH - 144 + 14;
     }
-    if (this.throwT > 0) { frame = this.spr.throwHand; x = OW / 2 - 96 + 40; y = OH - 144 + 22 + (0.35 - this.throwT) * -40; rot = 0; }
+    if (this.throwT > 0) { frame = this.spr.throwHand; x = OW / 2 - 96 + 60; y = OH - 144 + 14 + (0.35 - this.throwT) * -40; rot = 0; }
 
     if (frame) {
       g.save();
@@ -4229,7 +4276,7 @@ class Enemies {
     if (!small || Math.random() < 0.15) G.fx.bloodBurst(point, e.type === 'boss' ? 0.6 : 0.8, dir ? { x: dir.x * 2, y: 1, z: dir.z * 2 } : null);
     if (source === 'thermal' && Math.random() < 0.3) G.fx.sparks.burst(point, 3, 0xffa040, { speed: 2, life: 0.4, gravity: -2, size: 0.06 });
     // брызги на стену за врагом
-    if (dir && !small && Math.random() < 0.5) this.wallSplat(point, dir);
+    if (dir && !small && Math.random() < 0.8) this.wallSplat(point, dir);
     // реакция на попадание
     if (e.type !== 'boss' && (e.type !== 'heavy' || Math.random() < 0.25) && amount >= 10) {
       e.painT = 0.14;
@@ -4261,7 +4308,10 @@ class Enemies {
     if (e.type === 'boss') { e.gibbed = false; sfx.bossDeath(); }
     else sfx.enemyDeath(e.type, this.volumeAt(e.pos));
     if (e.gibbed) this.gib(e);
-    else G.fx.bloodBurst(c, 1.2);
+    else G.fx.bloodBurst(c, 1.6);
+    // убийство вблизи — кровь на экран
+    const pd = Math.hypot(e.pos.x - G.player.pos.x, e.pos.z - G.player.pos.z);
+    if (pd < 4.5 && e.type !== 'boss') G.weapons.splatterScreen(Math.round((e.gibbed ? 16 : 9) * (1.3 - pd / 4.5)));
     const gy = G.world.groundAt(e.pos.x, e.pos.z, e.pos.y + 0.3, 0.2, true);
     G.fx.decals.floor(e.pos.x, gy + 0.01, e.pos.z, e.type === 'heavy' ? 3.2 : 2.2 + Math.random());
     G.onEnemyKilled(e);
@@ -4272,7 +4322,8 @@ class Enemies {
     const k = e.type === 'heavy' ? 2 : e.type === 'boss' ? 4 : 1;
     G.fx.gibs.burst(c, 8 * k, 7, 0.35 * Math.sqrt(k), e.pos.y);
     G.fx.bloodBurst(c, 2.5 * k);
-    G.fx.blood.burst(c, 30 * k, 0xc8141c, { speed: 10, life: 1.2, gravity: 16, size: 0.13, sizeVar: 1.6, up: 0.6 });
+    G.fx.blood.burst(c, 45 * k, 0xe21b22, { speed: 11, life: 1.3, gravity: 16, size: 0.16, sizeVar: 1.8, up: 0.6 });
+    G.fx.blood.burst(c, 18 * k, 0xff6670, { speed: 4, life: 0.9, gravity: 5, size: 0.6, sizeVar: 1, alpha: 0.5 });
     e.sprite.visible = false;
     e.shadow.visible = false;
   }
@@ -5449,8 +5500,8 @@ function resize() {
   camera.userData.baseFov = w < h ? 92 : 76;
   camera.updateProjectionMatrix();
   // пиксельный слой: ~280 "пикселей" по высоте → оружие занимает ~45% кадра, пиксели крупные и чёткие
-  overlay.height = 280;
-  overlay.width = Math.round((280 * w) / h);
+  overlay.height = 220;
+  overlay.width = Math.round((220 * w) / h);
   G.fx.setScale(h * renderer.getPixelRatio());
 }
 window.addEventListener('resize', resize);

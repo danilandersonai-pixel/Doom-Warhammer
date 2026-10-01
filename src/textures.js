@@ -40,7 +40,8 @@ function snow() {
   for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
     const v = fbm(n, x / 32, y / 32);
     const ripple = Math.sin((x * 0.06 + y * 0.11) + fbm(n, x / 64 + 9, y / 64) * 6) * 0.5 + 0.5; // рябь от ветра
-    let c = mix(shadow, base, clamp(v * 1.3 - 0.1 + ripple * 0.25, 0, 1));
+    const big = fbm(n, x / 90 + 17, y / 90 + 3, 2);
+    let c = mix(shadow, base, clamp(v * 1.5 - 0.25 + ripple * 0.25 + (big - 0.5) * 0.9, 0, 1));
     if (ripple > 0.9) c = mix(c, bright, 0.6);
     const q = Math.round((c[0] - 180) / 8) * 8 + 180; // мягкая постеризация — пиксельные пятна
     T.set(x, y, clamp(q), clamp(c[1] + (q - c[0])), clamp(c[2] + (q - c[0])));

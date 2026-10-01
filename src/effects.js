@@ -421,8 +421,10 @@ export function createFX(scene) {
   };
   // Фонтан крови: крупные и мелкие капли разного размера + кусок-другой
   fx.bloodBurst = (p, amount = 1, dir = null) => {
-    fx.blood.burst(p, Math.round(26 * amount), 0xd0141c, { speed: 6, life: 0.9, gravity: 14, size: 0.09, sizeVar: 1.4, dir, spread: 0.9 });
-    fx.blood.burst(p, Math.round(8 * amount), 0xff4a50, { speed: 3, life: 0.6, gravity: 10, size: 0.2, sizeVar: 1, alpha: 0.75, dir });
+    // крупные насыщенные капли, полупрозрачные розоватые облачка и светлые кусочки плоти
+    fx.blood.burst(p, Math.round(34 * amount), 0xe21b22, { speed: 7, life: 1.0, gravity: 14, size: 0.12, sizeVar: 1.6, dir, spread: 1 });
+    fx.blood.burst(p, Math.round(12 * amount), 0xff5a64, { speed: 3.5, life: 0.7, gravity: 6, size: 0.42, sizeVar: 1, alpha: 0.55, dir });
+    fx.blood.burst(p, Math.round(6 * amount), 0xffe0c8, { speed: 5, life: 0.8, gravity: 12, size: 0.11, sizeVar: 0.8, dir, up: 0.5 });
   };
   return fx;
 }

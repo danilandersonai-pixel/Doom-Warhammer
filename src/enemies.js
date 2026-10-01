@@ -118,7 +118,7 @@ export class Enemies {
     if (!small || Math.random() < 0.15) G.fx.bloodBurst(point, e.type === 'boss' ? 0.6 : 0.8, dir ? { x: dir.x * 2, y: 1, z: dir.z * 2 } : null);
     if (source === 'thermal' && Math.random() < 0.3) G.fx.sparks.burst(point, 3, 0xffa040, { speed: 2, life: 0.4, gravity: -2, size: 0.06 });
     // брызги на стену за врагом
-    if (dir && !small && Math.random() < 0.5) this.wallSplat(point, dir);
+    if (dir && !small && Math.random() < 0.8) this.wallSplat(point, dir);
     // реакция на попадание
     if (e.type !== 'boss' && (e.type !== 'heavy' || Math.random() < 0.25) && amount >= 10) {
       e.painT = 0.14;
@@ -150,7 +150,10 @@ export class Enemies {
     if (e.type === 'boss') { e.gibbed = false; sfx.bossDeath(); }
     else sfx.enemyDeath(e.type, this.volumeAt(e.pos));
     if (e.gibbed) this.gib(e);
-    else G.fx.bloodBurst(c, 1.2);
+    else G.fx.bloodBurst(c, 1.6);
+    // убийство вблизи — кровь на экран
+    const pd = Math.hypot(e.pos.x - G.player.pos.x, e.pos.z - G.player.pos.z);
+    if (pd < 4.5 && e.type !== 'boss') G.weapons.splatterScreen(Math.round((e.gibbed ? 16 : 9) * (1.3 - pd / 4.5)));
     const gy = G.world.groundAt(e.pos.x, e.pos.z, e.pos.y + 0.3, 0.2, true);
     G.fx.decals.floor(e.pos.x, gy + 0.01, e.pos.z, e.type === 'heavy' ? 3.2 : 2.2 + Math.random());
     G.onEnemyKilled(e);
@@ -161,7 +164,8 @@ export class Enemies {
     const k = e.type === 'heavy' ? 2 : e.type === 'boss' ? 4 : 1;
     G.fx.gibs.burst(c, 8 * k, 7, 0.35 * Math.sqrt(k), e.pos.y);
     G.fx.bloodBurst(c, 2.5 * k);
-    G.fx.blood.burst(c, 30 * k, 0xc8141c, { speed: 10, life: 1.2, gravity: 16, size: 0.13, sizeVar: 1.6, up: 0.6 });
+    G.fx.blood.burst(c, 45 * k, 0xe21b22, { speed: 11, life: 1.3, gravity: 16, size: 0.16, sizeVar: 1.8, up: 0.6 });
+    G.fx.blood.burst(c, 18 * k, 0xff6670, { speed: 4, life: 0.9, gravity: 5, size: 0.6, sizeVar: 1, alpha: 0.5 });
     e.sprite.visible = false;
     e.shadow.visible = false;
   }
