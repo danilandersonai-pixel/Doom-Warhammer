@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Предпросмотр спрайтов</title>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+<style>
+  body { margin: 0; padding: 16px; background: #9fb3cf; font: 14px sans-serif; color: #102; }
+  canvas { image-rendering: pixelated; display: block; margin: 4px 0 16px; background: repeating-conic-gradient(#c8d2e0 0 25%, #b4c0d2 0 50%) 0 0 / 16px 16px; }
+</style>
+</head>
+<body>
+<!-- Страница для проверки арта глазами: tools/preview.html?set=chars|weapons|misc -->
+<div id="out"></div>
+<script type="module">
+  const set = new URLSearchParams(location.search).get('set') || 'chars';
+  const scale = Number(new URLSearchParams(location.search).get('scale') || 3);
+  const out = document.getElementById('out');
+  const show = (name, canvas, k = scale) => {
+    const t = document.createElement('div'); t.textContent = name; out.appendChild(t);
+    const c = document.createElement('canvas'); c.width = canvas.width * k; c.height = canvas.height * k;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(canvas, 0, 0, c.width, c.height);
+    out.appendChild(c);
+  };
+  if (set === 'chars') {
+    const { enemySheet } = await import('../src/art_chars.js');
+    for (const t of (new URLSearchParams(location.search).get('types') || 'fanatic,gunner,heavy,boss').split(',')) show(t, enemySheet(t).canvas, t === 'boss' ? 2 : scale);
+  } else {
+    const mod = await import(`../src/art_${set}.js`);
+    for (const [name, canvas] of Object.entries(mod.previewAll())) show(name, canvas);
+  }
+  window.ready = true;
+</script>
+</body>
+</html>
