@@ -4,7 +4,7 @@
 import re, pathlib
 
 root = pathlib.Path(__file__).resolve().parent.parent
-order = ['collision', 'arena', 'audio', 'effects', 'input', 'player', 'weapon', 'enemies', 'waves', 'hud', 'main']
+order = ['collision', 'sprites', 'arena', 'audio', 'effects', 'input', 'player', 'weapon', 'enemies', 'waves', 'hud', 'main']
 
 js = ["import * as THREE from 'three';"]
 for name in order:
@@ -19,6 +19,7 @@ body = re.sub(r'<script type="module" src="src/main.js"></script>', '', body)
 css = (root / 'style.css').read_text()
 
 out = f'''<title>Boltgun Prototype</title>
+
 <meta name="theme-color" content="#120c0c">
 <style>
 :root {{ color-scheme: dark; }}

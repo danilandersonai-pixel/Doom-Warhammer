@@ -1,6 +1,7 @@
 // Оружие в руках: модель из коробок, стрельба, отдача, вспышка, патроны, перезарядка, удар.
 // Оружие рисуется отдельной сценой поверх мира, чтобы не "проваливаться" в стены.
 import * as THREE from 'three';
+import { muzzleTexture } from './sprites.js';
 
 export const MAG_SIZE = 24;    // патронов в магазине (запас — бесконечный)
 const FIRE_DELAY = 0.13;       // секунд между выстрелами
@@ -16,7 +17,7 @@ export class Weapon {
     this.camera = new THREE.PerspectiveCamera(60, 1, 0.01, 10);
 
     // Свой свет для сцены оружия
-    this.scene.add(new THREE.HemisphereLight(0xc8b0a0, 0x302020, 1.6));
+    this.scene.add(new THREE.HemisphereLight(0xc8b8c8, 0x302020, 1.5));
     const dl = new THREE.DirectionalLight(0xffd0a0, 1.6);
     dl.position.set(-1, 2, 1);
     this.scene.add(dl);
@@ -30,10 +31,11 @@ export class Weapon {
 
   buildModel() {
     const box = new THREE.BoxGeometry(1, 1, 1);
-    const metal = new THREE.MeshLambertMaterial({ color: 0x2c2c32 });
-    const casing = new THREE.MeshLambertMaterial({ color: 0x5c1c18 }); // тёмно-красный корпус
-    const brass = new THREE.MeshLambertMaterial({ color: 0xa07a38 });
-    const armor = new THREE.MeshLambertMaterial({ color: 0x34363e });
+    const flat = (color) => new THREE.MeshLambertMaterial({ color, flatShading: true });
+    const metal = flat(0x2a2a30), metalL = flat(0x4a4a54);
+    const casing = flat(0x6a1a16);               // тёмно-красный корпус
+    const brass = flat(0xc09a40);
+    const armor = flat(0x3a4a6a), armorL = flat(0x5a6e94); // бронированная перчатка
     const g = new THREE.Group();
     const add = (mat, sx, sy, sz, x, y, z, rx = 0) => {
       const m = new THREE.Mesh(box, mat);
@@ -43,50 +45,48 @@ export class Weapon {
       g.add(m);
       return m;
     };
-    add(metal, 0.15, 0.17, 0.5, 0, 0, 0);              // ствольная коробка
-    add(casing, 0.17, 0.07, 0.44, 0, 0.11, -0.02);     // верхний кожух
-    add(metal, 0.11, 0.11, 0.36, 0, 0.02, -0.4);       // кожух ствола
-    add(brass, 0.12, 0.02, 0.38, 0, 0.085, -0.4);      // латунная полоса
-    add(brass, 0.175, 0.03, 0.03, 0, 0.0, 0.2);        // латунные кольца
-    add(brass, 0.175, 0.03, 0.03, 0, 0.0, -0.2);
-    add(metal, 0.04, 0.06, 0.06, 0, 0.17, -0.12);      // прицел
-    add(metal, 0.09, 0.24, 0.13, 0, -0.18, -0.06, 0.15); // магазин
-    add(metal, 0.08, 0.2, 0.09, 0, -0.15, 0.18, -0.35);  // рукоять
-    add(armor, 0.17, 0.14, 0.2, 0.01, -0.2, 0.24);     // бронированная перчатка
-    add(armor, 0.2, 0.12, 0.18, -0.06, -0.08, -0.36);  // вторая рука под стволом
-    const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.12, 8), metal);
+    // корпус — массивный, "квадратный", как у тяжёлого ретро-оружия
+    add(metal, 0.2, 0.2, 0.62, 0, 0, 0);
+    add(casing, 0.22, 0.09, 0.56, 0, 0.14, 0.0);
+    add(brass, 0.23, 0.02, 0.56, 0, 0.1, 0.0);
+    add(metalL, 0.06, 0.07, 0.3, 0, 0.21, -0.08);           // прицельная планка
+    add(brass, 0.08, 0.04, 0.05, 0, 0.26, -0.2);
+    // ствол с кожухом и прорезями
+    add(metal, 0.15, 0.15, 0.42, 0, 0.02, -0.5);
+    for (let i = 0; i < 3; i++) add(metalL, 0.16, 0.03, 0.06, 0, 0.09, -0.38 - i * 0.11);
+    add(brass, 0.17, 0.17, 0.04, 0, 0.02, -0.3);
+    add(brass, 0.17, 0.17, 0.04, 0, 0.02, -0.7);
+    const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.12, 6), metal);
     muzzle.rotation.x = Math.PI / 2;
-    muzzle.position.set(0, 0.02, -0.63);
+    muzzle.position.set(0, 0.02, -0.76);
     g.add(muzzle);
+    // магазин, торчащий снизу, и рукоять
+    add(metal, 0.12, 0.3, 0.16, 0, -0.22, -0.12, 0.12);
+    add(brass, 0.125, 0.04, 0.165, 0, -0.33, -0.1, 0.12);
+    add(metal, 0.1, 0.24, 0.12, 0, -0.18, 0.22, -0.3);
+    // латные перчатки
+    add(armor, 0.24, 0.18, 0.26, 0.02, -0.26, 0.3);
+    add(armorL, 0.25, 0.05, 0.27, 0.02, -0.17, 0.3);
+    add(armor, 0.26, 0.15, 0.22, -0.04, -0.11, -0.5);
+    add(armorL, 0.27, 0.04, 0.23, -0.04, -0.04, -0.5);
 
-    // Вспышка выстрела: три скрещённые плоскости со светящейся текстурой
-    const c = document.createElement('canvas');
-    c.width = c.height = 64;
-    const cg = c.getContext('2d');
-    const grad = cg.createRadialGradient(32, 32, 0, 32, 32, 32);
-    grad.addColorStop(0, 'rgba(255,255,220,1)');
-    grad.addColorStop(0.3, 'rgba(255,180,60,0.9)');
-    grad.addColorStop(1, 'rgba(255,80,0,0)');
-    cg.fillStyle = grad;
-    cg.fillRect(0, 0, 64, 64);
+    // Вспышка выстрела — пиксельная звезда
     const flashMat = new THREE.MeshBasicMaterial({
-      map: new THREE.CanvasTexture(c), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+      map: muzzleTexture(), transparent: true, alphaTest: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
     });
     this.flash = new THREE.Group();
-    const plane = new THREE.PlaneGeometry(0.5, 0.5);
-    const p1 = new THREE.Mesh(plane, flashMat);
-    const p2 = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.9), flashMat);
+    const p1 = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.75), flashMat);
+    const p2 = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 1.0), flashMat);
     p2.rotation.x = Math.PI / 2;
-    const p3 = p2.clone();
-    p3.rotation.z = Math.PI / 2;
-    p2.position.z = p3.position.z = -0.3;
-    this.flash.add(p1, p2, p3);
-    this.flash.position.set(0, 0.02, -0.72);
+    p2.position.z = -0.25;
+    this.flash.add(p1, p2);
+    this.flash.position.set(0, 0.02, -0.86);
     g.add(this.flash);
 
     this.model = g;
-    this.basePos = new THREE.Vector3(0.21, -0.2, -0.46);
-    g.scale.setScalar(0.56);
+    // ближе к центру экрана, как в классических шутерах
+    this.basePos = new THREE.Vector3(0.12, -0.22, -0.5);
+    g.scale.setScalar(0.6);
     g.position.copy(this.basePos);
     this.scene.add(g);
   }
@@ -190,7 +190,7 @@ export class Weapon {
     this.flash.visible = on;
     this.flashLight.intensity = on ? 4 : 0;
     if (on) {
-      this.flash.rotation.z = Math.random() * Math.PI;
+      this.flash.rotation.z = Math.floor(Math.random() * 4) * Math.PI / 4;
       const s = 0.8 + Math.random() * 0.5;
       this.flash.scale.set(s, s, s);
     }

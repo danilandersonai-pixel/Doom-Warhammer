@@ -19,7 +19,7 @@
   <!-- Интерфейс поверх игры -->
   <div id="hud" class="hidden">
     <div id="damage"></div>
-    <div id="crosshair"></div>
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
     <div id="hitmarker"></div>
     <div id="wave"><span id="waveLabel">ВОЛНА 1 / 3</span><span id="enemiesLeft"></span></div>
     <div id="banner"></div>
@@ -28,8 +28,8 @@
       <div class="bar"><div id="bossFill" class="fill"></div></div>
     </div>
     <div id="stats">
-      <div class="row"><span class="lbl">БРОНЯ</span><div class="bar"><div id="armorFill" class="fill armor"></div></div><span id="armorNum" class="num"></span></div>
-      <div class="row"><span class="lbl">ЗДОРОВЬЕ</span><div class="bar"><div id="healthFill" class="fill health"></div></div><span id="healthNum" class="num"></span></div>
+      <div class="row"><span class="icon armor"></span><span class="lbl">БРОНЯ</span><div class="bar"><div id="armorFill" class="fill armor"></div></div><span id="armorNum" class="num"></span></div>
+      <div class="row"><span class="icon health"></span><span class="lbl">ЗДОРОВЬЕ</span><div class="bar"><div id="healthFill" class="fill health"></div></div><span id="healthNum" class="num"></span></div>
     </div>
     <div id="ammo"><span id="ammoNum">24</span><span class="max"> / ∞</span><div id="reloadHint"></div></div>
   </div>

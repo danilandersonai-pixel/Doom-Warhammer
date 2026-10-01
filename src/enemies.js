@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { resolveCircle, pointInColliders } from './collision.js';
 import { ARENA_HALF } from './arena.js';
 import { sfx } from './audio.js';
+import { enemyAtlas, plasmaTexture, SPRITE_FRAMES } from './sprites.js';
 
 // Характеристики типов врагов
 const TYPES = {
@@ -16,96 +17,56 @@ const TYPES = {
 };
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
-const HORN = new THREE.ConeGeometry(0.08, 0.35, 5);
-const EYE_MAT = new THREE.MeshBasicMaterial({ color: 0xff3010 });
+const HIDDEN_MAT = new THREE.MeshBasicMaterial();
 const tmpV = new THREE.Vector3();
+// Размер спрайта в метрах на один пиксель
+const PIXEL = { melee: 0.047, ranged: 0.047, boss: 0.062 };
 
-// Деталь модели: масштабированная коробка
-function part(parent, mat, sx, sy, sz, x, y, z) {
-  const m = new THREE.Mesh(BOX, mat);
-  m.scale.set(sx, sy, sz);
-  m.position.set(x, y, z);
-  parent.add(m);
-  return m;
-}
-
-// Конечность с шарниром наверху (чтобы её можно было вращать)
-function limb(parent, mat, x, y, w, len) {
-  const pivot = new THREE.Group();
-  pivot.position.set(x, y, 0);
-  part(pivot, mat, w, len, w * 1.1, 0, -len / 2, 0);
-  parent.add(pivot);
-  return pivot;
-}
-
-// Собираем модель врага. Перёд модели смотрит на +Z.
-function buildModel(type, t) {
+// Враг — плоский пиксельный спрайт, всегда повёрнутый к камере (как в шутерах 90-х)
+function buildModel(type) {
+  const atlas = enemyAtlas(type);
   const g = new THREE.Group();
-  g.rotation.order = 'YXZ';
-  const main = new THREE.MeshLambertMaterial({ color: t.color });
-  const dark = new THREE.MeshLambertMaterial({ color: t.dark });
-  const metal = new THREE.MeshLambertMaterial({ color: 0x777070 });
-  const boss = type === 'boss';
+  const map = new THREE.CanvasTexture(atlas.canvas);
+  map.magFilter = map.minFilter = THREE.NearestFilter;
+  map.generateMipmaps = false;
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.repeat.set(1 / SPRITE_FRAMES, 1);
+  // emissiveMap = та же текстура: спрайт немного "светится" своими цветами и не тонет в темноте
+  const mat = new THREE.MeshLambertMaterial({ map, emissiveMap: map, emissive: 0x383030, alphaTest: 0.5, side: THREE.DoubleSide });
+  const w = atlas.frameW * PIXEL[type], h = atlas.frameH * PIXEL[type];
+  const geo = new THREE.PlaneGeometry(w, h);
+  geo.translate(0, h / 2, 0);
+  const sprite = new THREE.Mesh(geo, mat);
+  g.add(sprite);
 
-  const legs = [limb(g, dark, -0.15, 0.85, 0.2, 0.85), limb(g, dark, 0.15, 0.85, 0.2, 0.85)];
-  const torso = part(g, main, boss ? 0.8 : 0.56, 0.7, boss ? 0.48 : 0.34, 0, 1.22, 0);
-  if (type === 'melee') torso.rotation.x = 0.25; // сутулый
-  part(g, dark, 0.3, 0.3, 0.3, 0, 1.72, 0.02);   // голова
-  part(g, EYE_MAT, 0.07, 0.04, 0.03, -0.07, 1.74, 0.17);
-  part(g, EYE_MAT, 0.07, 0.04, 0.03, 0.07, 1.74, 0.17);
-  const sx = boss ? 0.5 : 0.38;
-  const arms = [limb(g, main, -sx, 1.5, 0.17, 0.7), limb(g, main, sx, 1.5, 0.17, 0.7)];
-
-  if (type === 'melee') {
-    part(arms[1], metal, 0.05, 0.85, 0.14, 0, -0.95, 0.05); // клинок
-  } else {
-    part(arms[1], metal, 0.13, boss ? 0.8 : 0.6, 0.15, 0, -0.85, 0); // оружие
-  }
-  if (boss) {
-    // наплечники и рога
-    part(g, dark, 0.38, 0.28, 0.5, -0.55, 1.58, 0);
-    part(g, dark, 0.38, 0.28, 0.5, 0.55, 1.58, 0);
-    part(g, metal, 0.5, 0.12, 0.2, 0, 1.0, 0.25); // пряжка пояса
-    for (const s of [-1, 1]) {
-      const h = new THREE.Mesh(HORN, metal);
-      h.position.set(s * 0.13, 1.95, 0);
-      h.rotation.z = -s * 0.5;
-      g.add(h);
-    }
-  }
-
-  // Невидимый хитбокс для попаданий — честнее и быстрее, чем луч по всем деталям
-  const hitbox = new THREE.Mesh(BOX, main);
+  // Невидимый хитбокс для попаданий
+  const hitbox = new THREE.Mesh(BOX, HIDDEN_MAT);
   hitbox.visible = false;
-  hitbox.scale.set(boss ? 1.1 : 0.75, 1.95, boss ? 0.8 : 0.6);
-  hitbox.position.y = 0.98;
+  hitbox.scale.set(w * 0.75, h * 0.95, w * 0.75);
+  hitbox.position.y = h * 0.475;
   g.add(hitbox);
-
-  g.scale.setScalar(t.scale);
-  return { group: g, mats: [main, dark], legs, arms, hitbox };
+  return { group: g, sprite, map, mats: [mat], hitbox, height: h };
 }
 
 export class Enemies {
-  // hooks: { onKill(enemy), onPlayerHit(amount) }
-  constructor(scene, colliders, solidMeshes, particles, sparks, hooks) {
+  // fx: { blood, sparks, gibs, decals, explosions }; hooks: { onKill(enemy), onPlayerHit(amount) }
+  constructor(scene, colliders, solidMeshes, fx, hooks) {
     this.scene = scene;
     this.colliders = colliders;
     this.solidMeshes = solidMeshes;
-    this.particles = particles;
-    this.sparks = sparks;
+    this.fx = fx;
+    this.particles = fx.blood;
+    this.sparks = fx.sparks;
     this.hooks = hooks;
     this.list = [];
     this.ray = new THREE.Raycaster();
+    this.cameraPos = new THREE.Vector3();
 
-    // Пул снарядов: светящаяся сфера + ореол
-    const core = new THREE.SphereGeometry(0.12, 8, 6);
-    const glow = new THREE.SphereGeometry(0.28, 8, 6);
-    const coreMat = new THREE.MeshBasicMaterial({ color: 0xffe080, fog: false });
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff4010, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
+    // Пул снарядов: зелёные варп-сгустки
+    const pmat = new THREE.SpriteMaterial({ map: plasmaTexture(), fog: false, depthWrite: false });
     this.projectiles = [];
     for (let i = 0; i < 40; i++) {
-      const m = new THREE.Mesh(core, coreMat);
-      m.add(new THREE.Mesh(glow, glowMat));
+      const m = new THREE.Sprite(pmat);
       m.visible = false;
       scene.add(m);
       this.projectiles.push({ mesh: m, active: false, vel: new THREE.Vector3(), life: 0, damage: 0 });
@@ -117,23 +78,24 @@ export class Enemies {
 
   spawn(type, x, z) {
     const t = TYPES[type];
-    const model = buildModel(type, t);
+    const model = buildModel(type);
     const e = {
       type, t, ...model,
       pos: { x, z }, yaw: 0, hp: t.hp, maxHp: t.hp, radius: t.radius,
       dead: false, deathT: 0, spawnT: 0, flashT: 0,
       cooldown: 0.5, attackT: 0, fireT: 1 + Math.random() * 1.5, burstLeft: 0, burstT: 0,
-      walk: Math.random() * 6, moving: false,
+      walk: Math.random() * 6, moving: false, shotT: 0, painT: 0,
       strafe: Math.random() < 0.5 ? -1 : 1, strafeT: 1 + Math.random() * 2,
       avoid: 0, avoidT: 0, kb: { x: 0, z: 0 },
     };
     e.hitbox.userData.enemy = e;
     e.group.position.set(x, 0, z);
-    e.group.scale.setScalar(0.01);
+    e.group.scale.set(1, 0.01, 1);
     this.scene.add(e.group);
     this.list.push(e);
     // эффект появления: столб красных искр
-    this.sparks.burst({ x, y: 0.5, z }, type === 'boss' ? 80 : 30, 0xff3010, { speed: 5, life: 0.7, gravity: -2, dir: { x: 0, y: 2, z: 0 } });
+    // эффект появления: столб зелёных варп-искр
+    this.sparks.burst({ x, y: 0.5, z }, type === 'boss' ? 90 : 35, 0x60ff40, { speed: 5, life: 0.8, gravity: -3, dir: { x: 0, y: 2, z: 0 } });
     return e;
   }
 
@@ -152,18 +114,27 @@ export class Enemies {
   damage(e, amount, point) {
     if (e.dead) return false;
     e.hp -= amount;
-    e.flashT = 0.09;
-    this.particles.burst(point, 10, 0x701010, { speed: 4, life: 0.6 });
+    e.flashT = 0.12;
+    e.painT = 0.15;
+    this.particles.burst(point, 12, 0xd01010, { speed: 4, life: 0.6 });
     if (e.hp > 0) return false;
     e.dead = true;
     e.deathT = 0;
-    const big = e.type === 'boss';
-    const c = { x: e.pos.x, y: big ? 2 : 1.1, z: e.pos.z };
-    this.particles.burst(c, big ? 120 : 35, 0x5a0c0c, { speed: big ? 9 : 6, life: 1.1 });
-    this.sparks.burst(c, big ? 100 : 25, 0xff8030, { speed: big ? 12 : 7, life: 0.5 });
-    big ? sfx.explosion(1) : sfx.enemyDeath(1);
+    if (e.type !== 'boss') this.explodeBody(e, 1);
+    else sfx.explosion(0.8);
     this.hooks.onKill(e);
     return true;
+  }
+
+  // Тело разлетается на куски: гибы, кровь, лужа на полу
+  explodeBody(e, k) {
+    const c = { x: e.pos.x, y: e.height * 0.55, z: e.pos.z };
+    this.fx.gibs.burst(c, Math.round(9 * k), 6 * Math.sqrt(k), 0.24 * Math.sqrt(k));
+    this.particles.burst(c, Math.round(40 * k), 0xc01010, { speed: 7 * Math.sqrt(k), life: 1.0 });
+    this.fx.explosions.spawn(new THREE.Vector3(c.x, c.y, c.z), 1.6 * Math.sqrt(k), 0.35);
+    this.fx.decals.add(e.pos.x, e.pos.z, 1.6 * k + Math.random());
+    e.sprite.visible = false;
+    sfx.enemyDeath(1);
   }
 
   // Отбросить врага (удар в ближнем бою)
@@ -195,7 +166,8 @@ export class Enemies {
     const dir = tmpV.set(player.pos.x - sx, 1.3 - sy, player.pos.z - sz).normalize();
     dir.applyAxisAngle(THREE.Object3D.DEFAULT_UP, angle);
     p.vel.copy(dir).multiplyScalar(e.t.projSpeed);
-    p.mesh.scale.setScalar(e.type === 'boss' ? 1.4 : 1);
+    p.mesh.scale.setScalar(e.type === 'boss' ? 0.75 : 0.5);
+    e.shotT = 0.15;
     p.mesh.visible = true;
     p.active = true;
     p.life = 5;
@@ -227,14 +199,18 @@ export class Enemies {
     return { x: dx, z: dz };
   }
 
-  update(dt, player) {
+  update(dt, player, camera) {
+    if (camera) this.cameraPos.copy(camera.position);
     for (const e of this.list) {
       if (e.dead) { this.animateDeath(e, dt); continue; }
 
       // появление: враг "вырастает" из пола, пока не действует
       if (e.spawnT < 0.5) {
         e.spawnT += dt;
-        e.group.scale.setScalar(e.t.scale * Math.min(1, e.spawnT / 0.5));
+        const k = Math.min(1, e.spawnT / 0.5);
+        e.group.scale.set(1, Math.max(0.01, k), 1);
+        e.group.position.set(e.pos.x, 0, e.pos.z);
+        e.group.rotation.y = Math.atan2(this.cameraPos.x - e.pos.x, this.cameraPos.z - e.pos.z);
         continue;
       }
 
@@ -272,10 +248,8 @@ export class Enemies {
       da = Math.atan2(Math.sin(da), Math.cos(da));
       e.yaw += da * (1 - Math.exp(-10 * dt));
 
-      // вспышка при попадании
       e.flashT -= dt;
-      const f = e.flashT > 0 ? 0.9 : 0;
-      for (const m of e.mats) m.emissive.setRGB(f, f * 0.8, f * 0.6);
+      e.shotT -= dt;
     }
 
     this.separate(player);
@@ -289,9 +263,10 @@ export class Enemies {
     // убираем со сцены отыгравших смерть
     for (let i = this.list.length - 1; i >= 0; i--) {
       const e = this.list[i];
-      if (e.dead && e.deathT > 1.3) {
+      if (e.dead && e.deathT > 1.3 && !e.sprite.visible) {
         this.scene.remove(e.group);
         for (const m of e.mats) m.dispose();
+        e.map.dispose();
         this.list.splice(i, 1);
       }
     }
@@ -407,36 +382,38 @@ export class Enemies {
     }
   }
 
-  // Анимация ходьбы и атак
+  // Спрайт всегда смотрит на камеру; кадры меняются с низкой частотой — "дёрганая" ретро-анимация
   animate(e) {
     const g = e.group;
     g.position.set(e.pos.x, 0, e.pos.z);
-    g.rotation.y = e.yaw;
-    const swing = e.moving ? Math.sin(e.walk) * 0.7 : 0;
-    e.legs[0].rotation.x = swing;
-    e.legs[1].rotation.x = -swing;
-    e.arms[0].rotation.x = -swing * 0.6;
-    if (e.type === 'melee' || (e.type === 'boss' && e.attackT > 0)) {
-      if (e.attackT > 0) {
-        // замах: рука поднимается над головой, в конце резко опускается
-        const p = 1 - e.attackT / e.t.windup;
-        e.arms[1].rotation.x = p < 0.75 ? -2.6 * (p / 0.75) : -2.6 + (p - 0.75) * 4 * 3.2;
-      } else {
-        e.arms[1].rotation.x = swing * 0.6 - 0.3;
-      }
-    } else {
-      // стрелки держат оружие перед собой
-      e.arms[1].rotation.x = -1.45;
-      e.arms[0].rotation.x = -1.2;
-    }
+    g.rotation.y = Math.atan2(this.cameraPos.x - e.pos.x, this.cameraPos.z - e.pos.z);
+    let frame = e.moving ? Math.floor(e.walk / 1.6) % 2 : 0;
+    if (e.attackT > 0) frame = e.type === 'boss' || e.attackT >= e.t.windup * 0.3 ? 2 : 3;
+    if (e.shotT > 0) frame = 3;
+    else if (e.type === 'ranged' && e.fireT < 0.35) frame = 2; // целится перед выстрелом
+    e.map.offset.x = frame / SPRITE_FRAMES;
+    // боль — красная вспышка
+    const pain = e.flashT > 0;
+    e.mats[0].emissive.setRGB(pain ? 1.2 : 0.22, pain ? 0.15 : 0.18, pain ? 0.1 : 0.18);
   }
 
   animateDeath(e, dt) {
     e.deathT += dt;
-    const p = Math.min(1, e.deathT / 0.5);
-    e.group.rotation.x = -p * Math.PI / 2;     // падает на спину
-    e.group.position.y = -Math.max(0, e.deathT - 0.7) * 1.2; // уходит под пол
-    for (const m of e.mats) m.emissive.setRGB(0, 0, 0);
+    if (e.type !== 'boss' || !e.sprite.visible) return;
+    // чемпион: серия взрывов по телу, потом разлетается
+    e.group.rotation.y = Math.atan2(this.cameraPos.x - e.pos.x, this.cameraPos.z - e.pos.z);
+    e.mats[0].emissive.setRGB(Math.random() < 0.5 ? 1.2 : 0.2, 0.15, 0.1);
+    e.boomT = (e.boomT || 0) - dt;
+    if (e.boomT <= 0) {
+      e.boomT = 0.12;
+      const p = new THREE.Vector3(e.pos.x + (Math.random() - 0.5) * 2, 0.5 + Math.random() * 3, e.pos.z + (Math.random() - 0.5) * 2);
+      this.fx.explosions.spawn(p, 1.4 + Math.random(), 0.35);
+      sfx.impact(1);
+    }
+    if (e.deathT > 1.1) {
+      this.explodeBody(e, 3);
+      sfx.explosion(1);
+    }
   }
 
   updateProjectiles(dt, player) {
@@ -463,13 +440,14 @@ export class Enemies {
   kill(p) {
     p.active = false;
     p.mesh.visible = false;
-    this.sparks.burst(p.mesh.position, 10, 0xff6020, { speed: 3, life: 0.35, gravity: 4 });
+    this.sparks.burst(p.mesh.position, 10, 0x80ff40, { speed: 3, life: 0.35, gravity: 4 });
   }
 
   clear() {
     for (const e of this.list) {
       this.scene.remove(e.group);
       for (const m of e.mats) m.dispose();
+      e.map.dispose();
     }
     this.list = [];
     for (const p of this.projectiles) { p.active = false; p.mesh.visible = false; }
