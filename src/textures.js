@@ -303,7 +303,7 @@ function banner(friend) {
 // Крупные плиты пола (256): серо-бежевый камень, тёмные швы, трещины, потёртости
 function flagstones(dark = false) {
   const T = canvasRGBA(256, 256), R = rng(dark ? 41 : 40), n = noise2(dark ? 43 : 42);
-  const A = dark ? hex('#4c463f') : hex('#615a51'), B = dark ? hex('#8a8276') : hex('#a69d8f');
+  const A = dark ? hex('#4c463f') : hex('#665a50'), B = dark ? hex('#8a7a68') : hex('#b0a292');
   for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
     const v = 0.5 + (fbm(n, x / 10, y / 10) - 0.5) * 0.45 + (fbm(n, x / 70 + 9, y / 70) - 0.5) * 0.4;
     const c = mix(A, B, clamp(v, 0, 1));
@@ -338,7 +338,7 @@ function gothicStone() {
   const T = canvasRGBA(128, 128), R = rng(51), n = noise2(53);
   for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
     const v = 0.5 + (fbm(n, x / 8, y / 8) - 0.5) * 0.5 + (fbm(n, x / 40, y / 40 + 5) - 0.5) * 0.35;
-    const c = mix(hex('#3e2e26'), hex('#8a6e58'), clamp(v, 0, 1));
+    const c = mix(hex('#463830'), hex('#9a8268'), clamp(v, 0, 1));
     T.set(x, y, c[0], c[1], c[2]);
   }
   // горизонтальные пояса-карнизы сверху и снизу

@@ -231,9 +231,11 @@ function fireFrames() {
 
 // ---------- Золотая метка-след (16×16, шеврон) ----------
 function footprint() {
-  const P = new Pix(16, 16);
-  // светящийся золотой шеврон: тёмная кайма, яркая середина
-  P.fill(P.mask().poly([[1, 13], [8, 3], [15, 13], [11, 14], [8, 9], [5, 14]]), [hex('#5a3a08'), hex('#a8741a'), hex('#e8b440'), hex('#ffe08a'), hex('#fff6d8')], { round: 2, contour: false, bias: 0.25 });
+  const P = new Pix(24, 24);
+  // золотая светящаяся плашка-ромб с тёмной бронзовой каймой (как метки пути в эталоне)
+  const gold = [hex('#7a4a0c'), hex('#c8861e'), hex('#f0b440'), hex('#ffd878'), hex('#fff2c4')];
+  P.fill(P.mask().poly([[12, 1], [23, 12], [12, 23], [1, 12]]), [hex('#1c120a'), hex('#2e1e10'), hex('#4a3016'), hex('#6a461e'), hex('#8a5e28')], { round: 2, contour: false });
+  P.fill(P.mask().poly([[12, 4], [20, 12], [12, 20], [4, 12]]), gold, { round: 3, contour: false, bias: 0.3, grad: 0.4 });
   return P;
 }
 

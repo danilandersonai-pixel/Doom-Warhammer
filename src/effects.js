@@ -323,7 +323,7 @@ export class Snowfall {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
-    this.points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xb8b2aa, size: 2, sizeAttenuation: false, transparent: true, opacity: 0.45, depthWrite: false }));
+    this.points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xc8a890, size: 2, sizeAttenuation: false, transparent: true, opacity: 0.45, depthWrite: false }));
     this.points.frustumCulled = false;
     scene.add(this.points);
   }

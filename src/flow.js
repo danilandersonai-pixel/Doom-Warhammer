@@ -17,10 +17,10 @@ export class Flow {
     this.G = G;
     // метки-следы: плоские шевроны на земле
     const tex = nearestTexture(miscArt().footprint);
-    const geo = new THREE.PlaneGeometry(1.0, 1.0).rotateX(-Math.PI / 2);
+    const geo = new THREE.PlaneGeometry(1.5, 1.1).rotateX(-Math.PI / 2);
     this.marks = [];
     for (let i = 0; i < 16; i++) {
-      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending, color: 0xffd070 }));
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, color: 0xffffff }));
       m.visible = false;
       G.scene.add(m);
       this.marks.push(m);
@@ -157,15 +157,15 @@ export class Flow {
     const dx = t.x - P.x, dz = t.z - P.z, d = Math.hypot(dx, dz);
     if (d < 3) return;
     const nx = dx / d, nz = dz / d, yaw = Math.atan2(-nx, -nz);
-    const n = Math.min(this.marks.length, Math.floor((d - 2) / 1.8));
+    const n = Math.min(this.marks.length, Math.floor((d - 1.6) / 2.4));
     for (let i = 0; i < n; i++) {
-      const m = this.marks[i], s = 2 + i * 1.8;
+      const m = this.marks[i], s = 1.6 + i * 2.4;
       const x = P.x + nx * s + Math.sin(i * 1.7) * 0.15, z = P.z + nz * s + Math.cos(i * 1.3) * 0.15;
       const y = G.world.groundAt(x, z, P.y + 2, 0.1);
       if (y < -1) continue;
       m.position.set(x, y + 0.03, z);
       m.rotation.y = yaw;
-      m.material.opacity = 0.7 + 0.3 * Math.max(0, Math.sin(this.time * 4 - i * 0.6));
+      m.material.opacity = 0.8 + 0.2 * Math.max(0, Math.sin(this.time * 4 - i * 0.6));
       m.visible = true;
     }
   }

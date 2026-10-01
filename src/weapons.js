@@ -289,7 +289,7 @@ export class Weapons {
     // смещения: покачивание, отдача, смена, перезарядка
     const bob = P.speed01 * (P.onGround ? 1 : 0.3);
     // стрелковое оружие — низко справа (как в эталоне), клинок — по центру
-    const baseX = set.side ? OW - 192 + 8 - OW * 0.06 : OW / 2 - 96 + 58, baseY = set.side ? OH - 144 + 8 : OH - 144 + 14;
+    const baseX = set.side ? Math.round(OW * 0.86) - 180 : OW / 2 - 96 + 58, baseY = set.side ? OH - 144 + 4 : OH - 144 + 14;
     let x = baseX + Math.cos(P.bob) * 5 * bob;
     let y = baseY + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
     y += this.switchT * 150;

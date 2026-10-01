@@ -6,7 +6,7 @@ import { enemySheet } from './art_chars.js';
 import { miscArt, haloCanvas } from './art_misc.js';
 import { nearestTexture, rng } from './pixel.js';
 
-export const FOG_COLOR = 0x6a7896;
+export const FOG_COLOR = 0x6e5a66;
 
 // Коробка, у которой UV растянуты по размеру (texScale метров на один повтор текстуры)
 function boxGeo(w, h, d, texScale) {
@@ -97,7 +97,7 @@ export function buildLevel(scene, world) {
   // крупный тёмный фон: шпили собора за стенами (подсвечены дымкой)
   scene.fog = new THREE.FogExp2(FOG_COLOR, 0.026);
   const skyGeo = new THREE.SphereGeometry(400, 32, 16);
-  const top = new THREE.Color(0x222a3a), hor = new THREE.Color(FOG_COLOR), cols = [];
+  const top = new THREE.Color(0x2e2430), hor = new THREE.Color(FOG_COLOR), cols = [];
   const sp = skyGeo.attributes.position;
   for (let i = 0; i < sp.count; i++) {
     const t = Math.max(0, sp.getY(i) / 400);
@@ -117,8 +117,8 @@ export function buildLevel(scene, world) {
   disc.lookAt(0, 0, 0);
 
 
-  scene.add(new THREE.HemisphereLight(0xc4ccdc, 0x5a4636, 1.55));
-  const sun = new THREE.DirectionalLight(0xffdcae, 1.35);
+  scene.add(new THREE.HemisphereLight(0xe2d0c0, 0x5a4030, 1.5));
+  const sun = new THREE.DirectionalLight(0xffd6a4, 1.3);
   sun.position.set(30, 50, -40);
   scene.add(sun);
 
@@ -127,14 +127,14 @@ export function buildLevel(scene, world) {
   const ico = new THREE.IcosahedronGeometry(1, 1);
   for (let i = 0; i < 22; i++) {
     const a = (i / 22) * Math.PI * 2 + R() * 0.2, d = 150 + R() * 70;
-    const m = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x1c2230), 0.35 + R() * 0.25)));
+    const m = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x2a1e26), 0.35 + R() * 0.25)));
     const h = 40 + R() * 70;
     m.scale.set(30 + R() * 30, h, 30 + R() * 30);
     m.position.set(Math.cos(a) * d, h * 0.25, Math.sin(a) * d);
     m.rotation.y = R() * 3;
     scene.add(m);
     // снежные шапки
-    const capM = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x2a3242), 0.4)));
+    const capM = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x34262e), 0.4)));
     capM.scale.set(m.scale.x * 0.45, h * 0.35, m.scale.z * 0.45);
     capM.position.set(m.position.x, m.position.y + h * 0.6, m.position.z);
     scene.add(capM);
@@ -142,7 +142,7 @@ export function buildLevel(scene, world) {
   const cone4 = new THREE.ConeGeometry(1, 1, 4);
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * Math.PI * 2 + R() * 0.3, d = 70 + R() * 30;
-    const c = new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x141824), 0.4 + R() * 0.25);
+    const c = new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x1e161c), 0.4 + R() * 0.25);
     const w = 3 + R() * 4, h = 14 + R() * 26;
     const tower = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), hazeMat(c));
     tower.position.set(Math.cos(a) * d, h / 2 - 2, Math.sin(a) * d);
@@ -175,7 +175,7 @@ export function buildLevel(scene, world) {
   for (let z = -5; z <= 5; z += 2.5) if (R() < 0.8) block(PIT.minX - 0.2, z, 0.18, 0.18, 0, 0.6 + R() * 0.6, M.metal, { top: M.metal, collide: false, ray: false });
 
   // ---------------- Крепостные стены арены ----------------
-  const WH = 7, H = 20;
+  const WH = 10, H = 20;
   // стена вдоль оси с проёмами: holes [{a, b, y0, y1}]
   function wall(axis, fixed, from, to, holes = []) {
     const pieces = [[from, to, 0, WH]];
@@ -214,10 +214,10 @@ export function buildLevel(scene, world) {
   }
   // угловые башни с шатровыми крышами
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    block(sx * (H + 1), sz * (H + 1), 4, 4, 0, 11, M.blocks, { texScale: 4 });
+    block(sx * (H + 1), sz * (H + 1), 4, 4, 0, 14, M.blocks, { texScale: 4 });
     const roof = new THREE.Mesh(cone4, M.slate);
     roof.scale.set(3.6, 5, 3.6);
-    roof.position.set(sx * (H + 1), 13.5, sz * (H + 1));
+    roof.position.set(sx * (H + 1), 16.5, sz * (H + 1));
     roof.rotation.y = Math.PI / 4;
     scene.add(roof);
   }
