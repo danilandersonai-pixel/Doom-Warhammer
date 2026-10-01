@@ -1,28 +1,75 @@
-# Собирает игру в один HTML-файл (для публикации как артефакт):
-# все модули из src/ склеиваются в один <script type="module">, CSS встраивается.
-# Запуск: python3 tools/build_artifact.py  ->  dist/boltgun.html
+# Собирает игру в один HTML-файл (для публикации как артефакт).
+# Каждый модуль из src/ заворачивается в свою область видимости (IIFE), импорты заменяются
+# ссылками на экспорты других модулей, порядок — по зависимостям. Three.js остаётся с CDN (importmap).
+# Запуск: python3 tools/build_artifact.py  ->  dist/iron-crusade.html
 import re, pathlib
 
 root = pathlib.Path(__file__).resolve().parent.parent
-order = ['collision', 'sprites', 'arena', 'audio', 'effects', 'input', 'player', 'weapon', 'enemies', 'waves', 'hud', 'main']
+src = root / 'src'
 
-js = ["import * as THREE from 'three';"]
-for name in order:
-    src = (root / 'src' / f'{name}.js').read_text()
-    src = re.sub(r"^import .*?;\n", "", src, flags=re.M | re.S)  # убираем импорты
-    src = re.sub(r"^export ", "", src, flags=re.M)                 # и слово export
-    js.append(f"// ===== {name}.js =====\n{src}")
+IMPORT_RE = re.compile(r"^import\s+(.+?)\s+from\s+'([^']+)';\s*$", re.M | re.S)
+EXPORT_DECL_RE = re.compile(r"^export\s+(?:async\s+)?(function|class|const|let)\s+(.+)$", re.M)
+
+def mod_id(path):
+    return '__m_' + path.stem
+
+def parse(path):
+    code = path.read_text()
+    deps, lines = [], []
+    for m in IMPORT_RE.finditer(code):
+        what, frm = m.group(1).strip(), m.group(2)
+        if frm == 'three':
+            continue  # THREE импортируется один раз наверху сборки
+        dep = (path.parent / frm).resolve()
+        deps.append(dep)
+        if what.startswith('{'):
+            names = [n.strip() for n in what.strip('{} ').split(',') if n.strip()]
+            parts = [f"{a.split(' as ')[0].strip()}: {a.split(' as ')[1].strip()}" if ' as ' in a else a for a in names]
+            lines.append(f"const {{ {', '.join(parts)} }} = {mod_id(dep)};")
+        else:
+            raise SystemExit(f'Неподдержанный импорт в {path.name}: {what}')
+    body = IMPORT_RE.sub('', code)
+    exports = []
+    for m in EXPORT_DECL_RE.finditer(body):
+        kind, rest = m.group(1), m.group(2)
+        if kind in ('function', 'class'):
+            exports.append(re.match(r'([A-Za-z_$][\w$]*)', rest).group(1))
+        else:
+            decl = rest.split(';')[0]
+            for part in decl.split(','):
+                mm = re.match(r'\s*([A-Za-z_$][\w$]*)\s*=', part)
+                if mm:
+                    exports.append(mm.group(1))
+    body = re.sub(r'^export\s+', '', body, flags=re.M)
+    return deps, '\n'.join(lines) + '\n' + body, exports
+
+# обход зависимостей от main.js
+order, seen, parsed = [], set(), {}
+def visit(p):
+    p = p.resolve()
+    if p in seen:
+        return
+    seen.add(p)
+    parsed[p] = parse(p)
+    for d in parsed[p][0]:
+        visit(d)
+    order.append(p)
+visit(src / 'main.js')
+
+chunks = ["import * as THREE from 'three';"]
+for p in order:
+    _, body, exports = parsed[p]
+    ret = f"return {{ {', '.join(exports)} }};" if exports else ''
+    chunks.append(f"// ===== {p.name} =====\nconst {mod_id(p)} = (() => {{\n{body}\n{ret}\n}})();")
 
 html = (root / 'index.html').read_text()
 body = html[html.index('<body>') + 6: html.index('</body>')]
-body = re.sub(r'<script type="module" src="src/main.js"></script>', '', body)
+body = body.replace('<script type="module" src="src/main.js"></script>', '')
 css = (root / 'style.css').read_text()
 
-out = f'''<title>Boltgun Prototype</title>
-
-<meta name="theme-color" content="#120c0c">
+out = f'''<title>Iron Crusade</title>
+<meta name="theme-color" content="#a9bcd6">
 <style>
-:root {{ color-scheme: dark; }}
 {css}
 </style>
 <script type="importmap">
@@ -30,9 +77,9 @@ out = f'''<title>Boltgun Prototype</title>
 </script>
 {body.strip()}
 <script type="module">
-{chr(10).join(js)}
+{chr(10).join(chunks)}
 </script>
 '''
 (root / 'dist').mkdir(exist_ok=True)
-(root / 'dist' / 'boltgun.html').write_text(out)
-print('dist/boltgun.html', len(out), 'bytes')
+(root / 'dist' / 'iron-crusade.html').write_text(out)
+print('dist/iron-crusade.html', len(out), 'bytes,', len(order), 'modules:', ', '.join(p.stem for p in order))

@@ -409,8 +409,8 @@ export class Enemies {
     if (phase >= 2) {
       e.summonT -= dt;
       if (e.summonT <= 0) {
-        e.summonT = phase === 3 ? 11 : 14;
-        if (this.aliveCount < 9) for (let i = 0; i < 3; i++) {
+        e.summonT = phase === 3 ? 16 : 14;
+        if (this.aliveCount < 7) for (let i = 0; i < 3; i++) {
           const a = Math.random() * Math.PI * 2;
           G.flow.spawnAt('fanatic', e.pos.x + Math.cos(a) * 3, e.pos.y, e.pos.z + Math.sin(a) * 3);
         }
