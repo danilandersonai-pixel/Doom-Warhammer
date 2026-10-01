@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#120c0c">
+  <title>Boltgun Prototype</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Three.js с CDN, фиксированная версия -->
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <!-- Сюда main.js добавит canvas -->
+  <div id="game"></div>
+
+  <!-- Интерфейс поверх игры -->
+  <div id="hud" class="hidden">
+    <div id="damage"></div>
+    <div id="crosshair"></div>
+    <div id="hitmarker"></div>
+    <div id="wave"><span id="waveLabel">ВОЛНА 1 / 3</span><span id="enemiesLeft"></span></div>
+    <div id="banner"></div>
+    <div id="boss" class="hidden">
+      <div class="label">ЧЕМПИОН</div>
+      <div class="bar"><div id="bossFill" class="fill"></div></div>
+    </div>
+    <div id="stats">
+      <div class="row"><span class="lbl">БРОНЯ</span><div class="bar"><div id="armorFill" class="fill armor"></div></div><span id="armorNum" class="num"></span></div>
+      <div class="row"><span class="lbl">ЗДОРОВЬЕ</span><div class="bar"><div id="healthFill" class="fill health"></div></div><span id="healthNum" class="num"></span></div>
+    </div>
+    <div id="ammo"><span id="ammoNum">24</span><span class="max"> / ∞</span><div id="reloadHint"></div></div>
+  </div>
+
+  <!-- Сенсорное управление (только на телефоне) -->
+  <div id="touch" class="hidden">
+    <div id="stickBase"><div id="stickKnob"></div></div>
+    <div id="btnReload" class="tbtn">R</div>
+    <div id="btnMelee" class="tbtn">УДАР</div>
+    <div id="btnFire" class="tbtn">ОГОНЬ</div>
+  </div>
+
+  <!-- Экран меню / паузы / победы / поражения -->
+  <div id="screen" class="overlay">
+    <h1 id="screenTitle">BOLTGUN PROTOTYPE</h1>
+    <p id="screenText"></p>
+    <button id="screenBtn">В БОЙ</button>
+    <p id="controlsHelp"></p>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
