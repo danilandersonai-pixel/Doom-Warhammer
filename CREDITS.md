@@ -17,8 +17,22 @@
 ## Оружие и руки от первого лица
 Модели собраны самостоятельно из примитивов three.js (`tools/bake/fp.js`) — свой дизайн, сторонних ассетов нет.
 
-## Текстуры, звук, музыка
-Процедурные, генерируются кодом игры (`src/textures.js`, `src/audio.js`).
+## Текстуры (CC0 1.0, ambientCG — https://ambientcg.com)
+Уменьшены до 256 px, палитра 24 цвета без дизеринга (`tools/make_textures.sh`), перекрашены и дополнены
+процедурными деталями (лужи, копоть, ржавые потёки, заклёпки, рамки) в `src/textures.js`.
+
+| Файл | Источник |
+|---|---|
+| `assets/textures/floor.png` | PavingStones138 |
+| `assets/textures/cobble.png` | PavingStones128 |
+| `assets/textures/metal.png` | MetalPlates013 |
+| `assets/textures/rust.png` | Metal041B (грязь и потёки на резном камне) |
+| `assets/textures/rock.png` | Rock051 |
+
+Остальные текстуры (резной камень, контейнеры, ящики, бочки, знамёна) — процедурные.
+
+## Звук и музыка
+Генерируются кодом игры (`src/audio.js`).
 
 ## Библиотеки
 three.js r160 (MIT) — https://threejs.org

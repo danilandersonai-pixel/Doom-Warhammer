@@ -2,7 +2,7 @@
 // Кадры запечены из 3D-модели рук и оружия (tools/bake_sprites.mjs) и рисуются на 2D-холсте поверх 3D
 // (логическое разрешение 256 px по высоте → крупные чёткие пиксели).
 import * as THREE from 'three';
-import { weaponSprites } from './art_weapons.js';
+import { muzzleFlashes } from './art_weapons.js';
 import { SPRITES } from './sprites.js';
 import { sfx } from './audio.js';
 import { miscArt } from './art_misc.js';
@@ -23,7 +23,7 @@ export class Weapons {
     this.G = G;
     this.overlay = overlay;
     this.ctx = overlay.getContext('2d');
-    this.spr = weaponSprites();   // процедурные вспышки выстрела
+    this.spr = muzzleFlashes();   // процедурные вспышки выстрела
     this.sheets = {};
     for (const k of [...Object.keys(WEAPONS), 'throw']) this.sheets[k] = SPRITES['w_' + k];
     this.tint = document.createElement('canvas');

@@ -2,6 +2,7 @@
 // Нужно: запущенный `python3 -m http.server 8000` в корне проекта, Playwright, three в tools/bake/node_modules
 // (cd tools/bake && npm install). Пишет assets/sprites/<имя>.png и <имя>.json.
 import fs from 'fs';
+import { spawnSync } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { JOBS } from './bake/jobs.mjs';
@@ -26,7 +27,12 @@ for (const name of names) {
   const t0 = Date.now();
   // функции не передаются в браузер — только данные
   const res = await page.evaluate((j) => window.bakeJob(j), JSON.parse(JSON.stringify(job)));
-  fs.writeFileSync(path.join(OUT, name + '.png'), Buffer.from(res.png.split(',')[1], 'base64'));
+  const png = path.join(OUT, name + '.png');
+  fs.writeFileSync(png, Buffer.from(res.png.split(',')[1], 'base64'));
+  // палитра ≤ 64 цветов → 8-битный PNG без потерь (в 3 раза меньше); нужен ffmpeg, без него остаётся RGBA
+  const tmp = png + '.tmp.png';
+  const r = spawnSync('ffmpeg', ['-loglevel', 'error', '-y', '-i', png, '-vf', 'split[a][b];[a]palettegen=max_colors=255:reserve_transparent=1:stats_mode=full[p];[b][p]paletteuse=dither=none:alpha_threshold=128', '-compression_level', '100', tmp]);
+  if (r.status === 0 && fs.existsSync(tmp)) fs.renameSync(tmp, png); else if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
   fs.writeFileSync(path.join(OUT, name + '.json'), JSON.stringify(res.meta, null, 1));
   console.log(`${name}: ${res.meta.cell.join('×')} × ${res.meta.frames} кадров, палитра ${res.meta.palette}, ${((Date.now() - t0) / 1000).toFixed(1)} с`);
 }

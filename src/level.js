@@ -171,6 +171,10 @@ export function buildLevel(scene, world) {
   scene.add(abyss);
   // для врагов пропасть — стена
   world.addBox(PIT.minX - 0.3, PIT.maxX, -100, 100, PIT.minZ - 0.3, PIT.maxZ + 0.3, { enemyOnly: true });
+  // узкий железный мост через пропасть (короткий путь для игрока, враги по нему не ходят)
+  block(16.5, 0, 1.5, 13, -0.22, 0.22, M.metal, { top: M.metal, texScale: 2 });
+  for (const z of [-6.2, -3, 0.2, 3.4, 6.2]) for (const sx of [-0.7, 0.7]) block(16.5 + sx, z, 0.12, 0.12, 0, 0.8 + (z === 0.2 && sx > 0 ? -0.5 : 0), M.metal, { top: M.metal, collide: false, ray: false });
+  for (const sx of [-0.7, 0.7]) block(16.5 + sx, -1.4, 0.06, 6.2, 0.76, 0.05, M.metal, { top: M.metal, collide: false, ray: false });   // перила (одно сорвано)
   // сломанное ограждение у края
   for (let z = -5; z <= 5; z += 2.5) if (R() < 0.8) block(PIT.minX - 0.2, z, 0.18, 0.18, 0, 0.6 + R() * 0.6, M.metal, { top: M.metal, collide: false, ray: false });
 

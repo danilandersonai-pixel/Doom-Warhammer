@@ -10,7 +10,7 @@
 </style>
 </head>
 <body>
-<!-- Страница для проверки арта глазами: tools/preview.html?set=chars|weapons|misc -->
+<!-- Страница для проверки арта глазами: tools/preview.html?set=chars|misc|tex -->
 <div id="out"></div>
 <script type="module">
   const set = new URLSearchParams(location.search).get('set') || 'chars';
@@ -23,8 +23,11 @@
     out.appendChild(c);
   };
   if (set === 'chars') {
-    const { enemySheet } = await import('../src/art_chars.js');
-    for (const t of (new URLSearchParams(location.search).get('types') || 'fanatic,gunner,heavy,boss').split(',')) show(t, enemySheet(t).canvas, t === 'boss' ? 2 : scale);
+    // запечённые атласы (tools/bake_sprites.mjs)
+    for (const t of (new URLSearchParams(location.search).get('types') || 'fanatic,gunner,heavy,boss,w_rifle,w_chainblade').split(',')) {
+      const img = new Image(); img.src = `../assets/sprites/${t}.png`; await img.decode();
+      show(t, img, 1);
+    }
   } else if (set === 'tex') {
     const { textureCanvases } = await import('../src/textures.js');
     for (const [name, canvas] of Object.entries(textureCanvases())) show(name, canvas);

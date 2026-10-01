@@ -2,7 +2,7 @@
 # Каждый модуль из src/ заворачивается в свою область видимости (IIFE), импорты заменяются
 # ссылками на экспорты других модулей, порядок — по зависимостям. Three.js остаётся с CDN (importmap).
 # Запуск: python3 tools/build_artifact.py  ->  dist/iron-crusade.html
-import re, pathlib
+import re, pathlib, base64, json
 
 root = pathlib.Path(__file__).resolve().parent.parent
 src = root / 'src'
@@ -62,6 +62,13 @@ for p in order:
     ret = f"return {{ {', '.join(exports)} }};" if exports else ''
     chunks.append(f"// ===== {p.name} =====\nconst {mod_id(p)} = await (async () => {{\n{body}\n{ret}\n}})();")
 
+# запечённые атласы и CC0-текстуры встраиваем как data URL (артефакт — один файл)
+def data_url(p):
+    return 'data:image/png;base64,' + base64.b64encode(p.read_bytes()).decode()
+sprites = {p.stem: {'png': data_url(p), 'meta': json.loads(p.with_suffix('.json').read_text())} for p in sorted((root / 'assets/sprites').glob('*.png'))}
+textures = {p.stem: data_url(p) for p in sorted((root / 'assets/textures').glob('*.png'))}
+embedded = f"<script>window.__SPRITES = {json.dumps(sprites)};\nwindow.__TEXTURES = {json.dumps(textures)};</script>"
+
 html = (root / 'index.html').read_text()
 body = html[html.index('<body>') + 6: html.index('</body>')]
 body = body.replace('<script type="module" src="src/main.js"></script>', '')
@@ -76,6 +83,7 @@ out = f'''<title>Iron Crusade</title>
   {{ "imports": {{ "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" }} }}
 </script>
 {body.strip()}
+{embedded}
 <script type="module">
 {chr(10).join(chunks)}
 </script>
