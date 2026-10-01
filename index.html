@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#120c0c">
-  <title>Boltgun Prototype</title>
+  <meta name="theme-color" content="#a9bcd6">
+  <title>Iron Crusade</title>
   <link rel="stylesheet" href="style.css">
   <!-- Three.js с CDN, фиксированная версия -->
   <script type="importmap">
@@ -13,41 +13,81 @@
   </script>
 </head>
 <body>
-  <!-- Сюда main.js добавит canvas -->
+  <!-- 3D-сцена -->
   <div id="game"></div>
+  <!-- Пиксельный слой поверх 3D: оружие в руках, кровь на экране -->
+  <canvas id="overlay"></canvas>
 
-  <!-- Интерфейс поверх игры -->
+  <!-- Интерфейс -->
   <div id="hud" class="hidden">
     <div id="damage"></div>
     <div id="crosshair"><i></i><i></i><i></i><i></i></div>
     <div id="hitmarker"></div>
-    <div id="wave"><span id="waveLabel">ВОЛНА 1 / 3</span><span id="enemiesLeft"></span></div>
+
+    <!-- Полоса задачи с портретом советника -->
+    <div id="objective">
+      <div class="advisorFrame"><canvas id="advisor" width="40" height="52"></canvas></div>
+      <div id="objText"></div>
+    </div>
+    <div id="objShort"></div>
     <div id="banner"></div>
-    <div id="boss" class="hidden">
-      <div class="label">ЧЕМПИОН</div>
-      <div class="bar"><div id="bossFill" class="fill"></div></div>
+    <div id="pickupMsg"></div>
+
+    <!-- Маркер цели и стрелка у края экрана -->
+    <div id="marker"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 1 L23 12 L12 23 L1 12 Z" fill="#2a2016" stroke="#e8b840" stroke-width="2.5"/><path d="M12 7 L17 12 L12 17 L7 12 Z" fill="#e8b840"/></svg><span id="markerDist"></span></div>
+    <div id="edgeArrow"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M16 3 L6 12 L16 21" fill="none" stroke="#2a1c0a" stroke-width="7" stroke-linejoin="miter"/><path d="M16 3 L6 12 L16 21" fill="none" stroke="#e8b840" stroke-width="4" stroke-linejoin="miter"/></svg></div>
+
+    <div id="bossbar" class="hidden"><div class="name">КОЛОСС</div><div class="bar"><div id="bossFill"></div></div></div>
+
+    <!-- Нижняя панель: оружие, портрет героя, броня/здоровье, полоса-клинок -->
+    <div id="bottom">
+      <div id="weaponBox"><canvas id="weaponIcon" width="48" height="20"></canvas><div id="ammoText"></div><div id="grenText"></div></div>
+      <div id="portraitBox"><canvas id="portrait" width="40" height="40"></canvas></div>
+      <div id="numbers"><div id="armorNum">0</div><div id="healthNum">100</div></div>
+      <svg id="blade" viewBox="0 0 130 34">
+        <defs><clipPath id="hpClip"><rect id="hpRect" x="0" y="0" width="130" height="34"/></clipPath></defs>
+        <polygon points="2,9 100,6 127,17 100,28 2,25" fill="#1a1010" fill-opacity="0.75"/>
+        <polygon points="4,11 99,8.5 122,17 99,25.5 4,23" fill="#ca2000" clip-path="url(#hpClip)"/>
+        <polygon points="4,11 99,8.5 122,17 99,12 4,14" fill="#ff5a3a" fill-opacity="0.55" clip-path="url(#hpClip)"/>
+        <polygon points="2,9 100,6 127,17 100,28 2,25" fill="none" stroke="#c89a3c" stroke-width="2"/>
+        <path d="M100 6 L100 28" stroke="#c89a3c" stroke-width="1.5"/>
+      </svg>
+      <div id="dashPip"></div>
     </div>
-    <div id="stats">
-      <div class="row"><span class="icon armor"></span><span class="lbl">БРОНЯ</span><div class="bar"><div id="armorFill" class="fill armor"></div></div><span id="armorNum" class="num"></span></div>
-      <div class="row"><span class="icon health"></span><span class="lbl">ЗДОРОВЬЕ</span><div class="bar"><div id="healthFill" class="fill health"></div></div><span id="healthNum" class="num"></span></div>
-    </div>
-    <div id="ammo"><span id="ammoNum">24</span><span class="max"> / ∞</span><div id="reloadHint"></div></div>
+    <button id="menuBtn" aria-label="Меню"><i></i><i></i><i></i></button>
   </div>
 
-  <!-- Сенсорное управление (только на телефоне) -->
+  <!-- Сенсорное управление: маленькие контурные кнопки по краям -->
   <div id="touch" class="hidden">
     <div id="stickBase"><div id="stickKnob"></div></div>
-    <div id="btnReload" class="tbtn">R</div>
-    <div id="btnMelee" class="tbtn">УДАР</div>
-    <div id="btnFire" class="tbtn">ОГОНЬ</div>
+    <div class="tbtn big" data-act="fire" id="btnFire"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="tbtn" data-act="jump" id="btnJump"><svg viewBox="0 0 24 24"><path d="M5 14 L12 6 L19 14 M5 20 L12 12 L19 20" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></div>
+    <div class="tbtn" data-act="dash" id="btnDash"><svg viewBox="0 0 24 24"><path d="M4 6 L11 12 L4 18 M12 6 L19 12 L12 18" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></div>
+    <div class="tbtn" data-act="melee" id="btnMelee"><svg viewBox="0 0 24 24"><path d="M4 20 L16 8 M14 4 L20 10 M6 14 L10 18" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15 5l1-1M17 7l1-1M19 9l1-1" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="tbtn" data-act="grenade" id="btnGrenade"><svg viewBox="0 0 24 24"><circle cx="12" cy="14" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 7h4V4h-4z M15 5 L19 3" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
+    <div class="tbtn" data-act="reload" id="btnReload"><svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2-5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M18 3v5h-5" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></div>
   </div>
 
-  <!-- Экран меню / паузы / победы / поражения -->
+  <!-- Экраны: меню, пауза с настройками, смерть, завершение -->
   <div id="screen" class="overlay">
-    <h1 id="screenTitle">BOLTGUN PROTOTYPE</h1>
-    <p id="screenText"></p>
-    <button id="screenBtn">В БОЙ</button>
-    <p id="controlsHelp"></p>
+    <div class="panel">
+      <h1 id="screenTitle">IRON CRUSADE</h1>
+      <p id="screenSub">прототип</p>
+      <div id="screenText"></div>
+      <div class="buttons">
+        <button id="screenBtn">В БОЙ</button>
+        <button id="restartBtn" class="ghost hidden">ЗАНОВО</button>
+      </div>
+      <details id="settings">
+        <summary>Настройки</summary>
+        <label>Чувствительность обзора <input id="setSens" type="range" min="0.3" max="2.5" step="0.05"></label>
+        <label>Размер кнопок <input id="setBtnSize" type="range" min="0.7" max="1.5" step="0.05"></label>
+        <label>Прозрачность кнопок <input id="setBtnAlpha" type="range" min="0.2" max="1" step="0.05"></label>
+        <label class="check"><input id="setMusic" type="checkbox"> Музыка</label>
+        <label class="check"><input id="setGyro" type="checkbox"> Гироскоп (наклон телефона двигает прицел)</label>
+      </details>
+      <p id="controlsHelp"></p>
+    </div>
   </div>
 
   <script type="module" src="src/main.js"></script>

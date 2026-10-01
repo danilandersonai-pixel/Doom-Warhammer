@@ -25,6 +25,9 @@
   if (set === 'chars') {
     const { enemySheet } = await import('../src/art_chars.js');
     for (const t of (new URLSearchParams(location.search).get('types') || 'fanatic,gunner,heavy,boss').split(',')) show(t, enemySheet(t).canvas, t === 'boss' ? 2 : scale);
+  } else if (set === 'tex') {
+    const { textureCanvases } = await import('../src/textures.js');
+    for (const [name, canvas] of Object.entries(textureCanvases())) show(name, canvas);
   } else {
     const mod = await import(`../src/art_${set}.js`);
     for (const [name, canvas] of Object.entries(mod.previewAll())) show(name, canvas);

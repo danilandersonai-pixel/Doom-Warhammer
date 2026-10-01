@@ -1,193 +1,166 @@
-// Точка входа: рендер, игровой цикл, стрельба, состояния игры (меню / бой / пауза / победа / поражение).
+// Точка входа: рендер, игровой цикл, связь систем, попадания и урон, экраны, настройки.
 import * as THREE from 'three';
-import { buildArena } from './arena.js';
+import { World } from './physics.js';
+import { buildLevel } from './level.js';
+import { createFX } from './effects.js';
 import { Input } from './input.js';
 import { Player } from './player.js';
-import { Weapon } from './weapon.js';
+import { Weapons } from './weapons.js';
+import { Projectiles } from './projectiles.js';
 import { Enemies } from './enemies.js';
-import { Waves } from './waves.js';
+import { Pickups } from './pickups.js';
+import { Flow } from './flow.js';
 import { Hud } from './hud.js';
-import { Particles, Tracers, Gibs, Decals, Explosions } from './effects.js';
-import { gibTextures, splatTextures, explosionAtlas } from './sprites.js';
-import { initAudio, sfx } from './audio.js';
+import { initAudio, sfx, audioSettings, music } from './audio.js';
 
-// Пиксельный шрифт (с кириллицей) грузим из скрипта, чтобы он не задерживал запуск игры.
-// Если не загрузится — останется моноширинный.
+// Шрифты грузим из скрипта, чтобы они не задерживали старт (нет сети — останутся системные)
 const fontLink = document.createElement('link');
 fontLink.rel = 'stylesheet';
-fontLink.href = 'https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap';
+fontLink.href = 'https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Yanone+Kaffeesatz:wght@400;700&display=swap';
 document.head.appendChild(fontLink);
 
-const BOLT_DAMAGE = 22;
-const MELEE_DAMAGE = 70;
-const MELEE_RANGE = 2.4;
-
-// Телефон или планшет — показываем сенсорное управление
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
-document.body.classList.toggle('touch', isTouch); // на телефоне HUD сверху, чтобы не мешать кнопкам
+document.body.classList.toggle('touch', isTouch);
 
-// ---------- Рендер ----------
-// Ретро-картинка: рисуем в маленьком разрешении и растягиваем без сглаживания (см. resize)
-const PIXEL_HEIGHT = isTouch ? 250 : 300; // высота картинки в "игровых" пикселях
-const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(1);
-renderer.autoClear = false; // рисуем две сцены: мир и оружие поверх
+// ---------- Настройки (сохраняются в браузере, если можно) ----------
+const settings = { sens: 1, btnSize: 1, btnAlpha: 0.55, music: true, gyro: false, volume: 1 };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('ironCrusadeSettings') || '{}')); } catch { /* без сохранения */ }
+function saveSettings() { try { localStorage.setItem('ironCrusadeSettings', JSON.stringify(settings)); } catch { /* нет хранилища */ } }
+function applySettings() {
+  document.documentElement.style.setProperty('--btn-scale', settings.btnSize);
+  document.documentElement.style.setProperty('--btn-alpha', settings.btnAlpha);
+  audioSettings(settings);
+}
+applySettings();
+
+// ---------- Рендер: близко к родному разрешению (окружение гладкое, пиксели — в текстурах) ----------
+const RENDER_SCALE = isTouch ? 0.75 : 1;
+const renderer = new THREE.WebGLRenderer({ antialias: !isTouch, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * RENDER_SCALE);
 document.getElementById('game').appendChild(renderer.domElement);
-
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, 1, 0.05, 150);
+const camera = new THREE.PerspectiveCamera(78, 1, 0.05, 900);
 camera.rotation.order = 'YXZ';
+const overlay = document.getElementById('overlay');
 
-// Вспышка выстрела освещает мир вокруг игрока (один точечный свет, обычно выключен)
-const muzzleLight = new THREE.PointLight(0xffa050, 0, 14, 2);
-scene.add(muzzleLight);
+// ---------- Общий контекст игры ----------
+const G = { scene, camera, isTouch, settings };
+G.world = new World();
+G.level = buildLevel(scene, G.world);
+G.fx = createFX(scene);
+G.input = new Input(isTouch, settings);
+G.player = new Player(G.world);
+G.hud = new Hud(G);
+G.projectiles = new Projectiles(G);
+G.enemies = new Enemies(G);
+G.pickups = new Pickups(G);
+G.weapons = new Weapons(G, overlay);
+G.flow = new Flow(G);
+const game = { state: 'menu', time: 0, stats: { kills: 0, shots: 0 } };
+G.game = game;
 
-const arena = buildArena(scene);
-const blood = new Particles(scene, 600, { size: 0.16 });
-const sparks = new Particles(scene, 400, { size: 0.12, additive: true });
-const tracers = new Tracers(scene);
-const gibs = new Gibs(scene, gibTextures());
-const decals = new Decals(scene, splatTextures());
-const explosions = new Explosions(scene, explosionAtlas());
-const hud = new Hud();
-const input = new Input(isTouch);
-const player = new Player();
-
-const game = { state: 'menu', time: 0, elapsed: 0, kills: 0, endT: -1, wasLocked: false };
-
-const enemies = new Enemies(scene, arena.colliders, arena.solidMeshes, { blood, sparks, gibs, decals, explosions }, {
-  onKill(e) {
-    game.kills++;
-    if (e.type === 'boss') {
-      player.addTrauma(0.8);
-      game.endT = 1.8; // небольшая пауза перед экраном победы
-    }
-  },
-  onPlayerHit(amount) {
-    player.damage(amount);
-    sfx.hurt();
-  },
-});
-
-const waves = new Waves(enemies, arena.spawnPoints, player, hud);
-
-const weapon = new Weapon({
-  onFire: shoot,
-  onMelee: melee,
-  onReloadStart: () => sfx.reload(),
-  onEmpty: () => sfx.empty(),
-});
-
-// ---------- Стрельба ----------
+// ---------- Луч выстрела: геометрия уровня + хитбоксы врагов + бочки ----------
 const ray = new THREE.Raycaster();
-const ndc = new THREE.Vector2();
-const muzzleWorld = new THREE.Vector3();
-const tmp = new THREE.Vector3();
-let muzzleT = 0;
+G.hitscan = (origin, dir, far) => {
+  ray.set(origin, dir);
+  ray.far = far;
+  const targets = G.level.solid.concat(G.enemies.hitboxes(), G.pickups.barrelMeshes());
+  const h = ray.intersectObjects(targets, false)[0];
+  if (!h) return null;
+  return {
+    point: h.point, distance: h.distance, object: h.object,
+    enemy: h.object.userData.enemy || null, barrel: h.object.userData.barrel || null,
+    normal: h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : new THREE.Vector3(0, 1, 0),
+  };
+};
 
-function shoot() {
-  sfx.shoot();
-  player.addTrauma(0.14);
-  player.kick += 0.035;
-  muzzleT = 0.05;
-
-  // небольшой разброс
-  ndc.set((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02);
-  ray.setFromCamera(ndc, camera);
-  ray.far = 100;
-  const hits = ray.intersectObjects(arena.solidMeshes.concat(enemies.hitboxes()), false);
-  muzzleWorld.set(0.22, -0.2, -0.8);
-  camera.localToWorld(muzzleWorld);
-
-  if (!hits.length) {
-    tracers.fire(muzzleWorld, tmp.copy(ray.ray.direction).multiplyScalar(60).add(ray.ray.origin));
-    return;
+// Результат попадания: кровь/искры, урон, декали
+G.applyHit = (hit, dmg, dir, source, quiet = false) => {
+  if (hit.enemy) {
+    const killed = G.enemies.damage(hit.enemy, dmg, hit.point, source, dir);
+    if (!quiet || killed) G.hud.hitmarker(killed);
+    if (!quiet) sfx.flesh();
+  } else if (hit.barrel) {
+    G.pickups.damageBarrel(hit.barrel, dmg);
+    G.fx.sparks.burst(hit.point, 6, 0xffc060, { speed: 4, life: 0.3, size: 0.06 });
+  } else if (!quiet) {
+    G.fx.sparks.burst(hit.point, 9, 0xffc060, { speed: 6, life: 0.3, gravity: 8, dir: hit.normal, spread: 0.7, size: 0.06 });
+    G.fx.dust.burst(hit.point, 6, 0xd8dee8, { speed: 2, life: 0.8, gravity: 3, dir: hit.normal, spread: 0.7, size: 0.18, alpha: 0.8 }); // снежная/каменная пыль
   }
-  const h = hits[0];
-  tracers.fire(muzzleWorld, h.point);
-  const enemy = h.object.userData.enemy;
-  // болт взрывается при попадании: искры
-  if (enemy) {
-    const killed = enemies.damage(enemy, BOLT_DAMAGE, h.point);
-    hud.hitmarker(killed);
-    explosions.spawn(tmp.copy(h.point).addScaledVector(ray.ray.direction, -0.3), 0.7, 0.22);
-    sfx.flesh();
-  } else {
-    const n = h.face ? tmp.copy(h.face.normal).transformDirection(h.object.matrixWorld) : null;
-    sparks.burst(h.point, 10, 0xffb050, { speed: 6, life: 0.3, gravity: 6, dir: n, spread: 0.8 });
-    blood.burst(h.point, 8, 0x6a625a, { speed: 2.5, life: 0.7, gravity: 6, dir: n, spread: 0.8 }); // каменная крошка
-    const ep = h.point.clone();
-    if (n) ep.addScaledVector(n, 0.25);
-    explosions.spawn(ep, 0.8, 0.25); // болт взрывается
-    const d = h.distance;
-    sfx.impact(Math.max(0.15, 1 - d / 40));
-  }
-}
+};
 
-// ---------- Ближний бой ----------
-function melee() {
-  sfx.melee();
-  player.addTrauma(0.12);
-  const f = player.forward();
-  let hit = false, killed = false;
-  for (const e of enemies.list) {
-    if (e.dead || e.spawnT < 0.3) continue;
-    const dx = e.pos.x - player.pos.x, dz = e.pos.z - player.pos.z;
-    const d = Math.hypot(dx, dz) || 0.001;
-    if (d - e.radius > MELEE_RANGE) continue;
-    if ((dx * f.x + dz * f.z) / d < 0.45) continue; // только то, что перед нами
-    const point = tmp.set(e.pos.x, 1.2 * e.t.scale, e.pos.z);
-    killed = enemies.damage(e, MELEE_DAMAGE, point) || killed;
-    enemies.knockback(e, dx / d, dz / d, e.type === 'boss' ? 3 : 12);
-    hit = true;
+// Урон по площади (взрывы): враги, бочки, игрок
+G.damageArea = (p, radius, dmg, source, except = null, quiet = false) => {
+  for (const e of G.enemies.list) {
+    if (e.dead || !e.active || e === except) continue;
+    const dx = e.pos.x - p.x, dz = e.pos.z - p.z, dy = e.pos.y + e.height / 2 - p.y;
+    const d = Math.max(0, Math.hypot(dx, dy, dz) - e.radius);
+    if (d > radius) continue;
+    const k = 1 - d / radius;
+    G.enemies.damage(e, dmg * k, { x: e.pos.x, y: e.pos.y + e.height * 0.5, z: e.pos.z }, source, { x: dx, y: 0.5, z: dz });
+    if (!quiet && e.type !== 'boss') G.enemies.knockback(e, dx / (d + 0.5), dz / (d + 0.5), 8 * k);
   }
-  if (hit) {
-    sfx.meleeHit();
-    player.addTrauma(0.3);
-    hud.hitmarker(killed);
+  for (const b of G.pickups.barrels) {
+    if (b.dead || source === 'thermal') continue;
+    const d = Math.hypot(b.x - p.x, b.z - p.z);
+    if (d < radius) G.pickups.damageBarrel(b, dmg * (1 - d / radius));
   }
-}
+  if (source !== 'rifle' && source !== 'thermal') {
+    const P = G.player;
+    const d = Math.hypot(P.pos.x - p.x, P.pos.y + 1 - p.y, P.pos.z - p.z);
+    if (d < radius) G.hurtPlayer(dmg * (1 - d / radius) * (source === 'enemyRocket' ? 1 : 0.4), p);
+  }
+};
 
-// ---------- Экраны и состояния ----------
+G.hurtPlayer = (amount, from) => {
+  if (game.state !== 'playing' || amount <= 0) return;
+  G.player.damage(amount);
+  G.hud.hurt();
+  sfx.hurt();
+};
+
+G.onEnemyKilled = (e) => {
+  game.stats.kills++;
+  if (e.type !== 'boss') G.pickups.drop(e);
+};
+G.onBossPhase = (phase) => G.flow.onBossPhase(phase);
+G.onBossDead = () => G.flow.onBossDead();
+G.onComplete = () => endGame(true);
+
+// ---------- Экраны ----------
 const screen = document.getElementById('screen');
-const screenTitle = document.getElementById('screenTitle');
-const screenText = document.getElementById('screenText');
-const screenBtn = document.getElementById('screenBtn');
-document.getElementById('controlsHelp').innerHTML = isTouch
-  ? 'Левая половина экрана — движение · правая — поворот камеры<br>ОГОНЬ — стрельба (можно вести пальцем) · УДАР — ближний бой · R — перезарядка'
-  : 'WASD — движение · мышь — обзор · ЛКМ — огонь<br>ПКМ или F — ближний бой · R — перезарядка · Esc — пауза';
-screenText.textContent = 'Отбейте три волны врагов и одолейте их чемпиона.';
+const $ = (id) => document.getElementById(id);
+$('controlsHelp').innerHTML = isTouch
+  ? 'Слева — стик движения, справа — свайп для обзора. Кнопки: огонь (можно вести пальцем), прыжок, рывок, удар клинком, граната, перезарядка/смена оружия.'
+  : 'WASD — бег · мышь — обзор · ЛКМ — огонь · Пробел — прыжок · Shift — рывок<br>F или ПКМ — цепной клинок · G — граната · R — перезарядка · 1–5 или колесо — оружие · Esc — пауза';
+$('screenText').textContent = 'Орден Железного Похода высадился у осквернённой площади. Очисти её от еретиков и сокруши их Колосса.';
 
-function showScreen(title, text, btn) {
-  screenTitle.textContent = title;
-  screenText.innerHTML = text;
-  screenBtn.textContent = btn;
+function showScreen(title, sub, html, btn, restart = false) {
+  $('screenTitle').textContent = title;
+  $('screenSub').textContent = sub;
+  $('screenText').innerHTML = html;
+  $('screenBtn').textContent = btn;
+  $('restartBtn').classList.toggle('hidden', !restart);
   screen.classList.remove('hidden');
 }
 
 function lockPointer() {
   if (isTouch) return;
-  const p = renderer.domElement.requestPointerLock();
-  if (p && p.catch) p.catch(() => {}); // браузер может отказать — не страшно
+  const p = renderer.domElement.requestPointerLock && renderer.domElement.requestPointerLock();
+  if (p && p.catch) p.catch(() => {});
 }
 
 function startGame() {
   initAudio();
-  enemies.clear();
-  blood.clear();
-  sparks.clear();
-  tracers.clear();
-  gibs.clear();
-  decals.clear();
-  explosions.clear();
-  player.reset();
-  weapon.reset();
-  waves.reset();
-  input.reset();
-  hud.hideBanner();
-  game.kills = 0;
+  G.enemies.clear();
+  G.projectiles.clear();
+  G.fx.clear();
+  G.player.reset(G.level.playerStart);
+  G.weapons.reset();
+  G.pickups.reset();
+  G.flow.reset();
+  game.stats = { kills: 0 };
   game.elapsed = 0;
-  game.endT = -1;
   resume();
 }
 
@@ -195,111 +168,134 @@ function resume() {
   initAudio();
   game.state = 'playing';
   screen.classList.add('hidden');
-  hud.show(true);
-  document.getElementById('touch').classList.toggle('hidden', !isTouch);
-  input.reset();
+  G.hud.show(true);
+  $('touch').classList.toggle('hidden', !isTouch);
+  G.input.reset();
   lockPointer();
 }
 
 function pause() {
   if (game.state !== 'playing') return;
   game.state = 'paused';
-  input.reset();
-  showScreen('ПАУЗА', 'Бой ждёт.', 'ПРОДОЛЖИТЬ');
+  G.input.reset();
+  sfx.beam(false);
+  if (document.pointerLockElement) document.exitPointerLock();
+  showScreen('ПАУЗА', 'бой ждёт', '', 'ПРОДОЛЖИТЬ', true);
 }
 
+function fmtTime(t) { return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`; }
+
 function endGame(won) {
-  game.state = won ? 'won' : 'lost';
-  hud.hideBanner();
-  input.reset();
-  document.getElementById('touch').classList.add('hidden');
+  game.state = won ? 'won' : 'dead';
+  G.input.reset();
+  sfx.beam(false);
+  $('touch').classList.add('hidden');
   if (document.pointerLockElement) document.exitPointerLock();
-  const m = Math.floor(game.elapsed / 60), s = Math.floor(game.elapsed % 60).toString().padStart(2, '0');
-  const stats = `Время: ${m}:${s} · Убито врагов: ${game.kills}`;
+  const stats = `<div class="stats"><span>Время</span><b>${fmtTime(game.elapsed)}</b><span>Убито врагов</span><b>${game.stats.kills}</b><span>Секреты</span><b>${G.flow.secretFound ? 1 : 0} / 1</b></div>`;
   if (won) {
     sfx.victory();
-    showScreen('ПОБЕДА', `Чемпион повержен. Арена очищена.<br>${stats}`, 'ЗАНОВО');
+    music.setIntensity(0);
+    showScreen('ПЛОЩАДЬ ОЧИЩЕНА', 'уровень пройден', stats, 'ЕЩЁ РАЗ');
   } else {
     sfx.defeat();
-    showScreen('ПОРАЖЕНИЕ', `Вы пали в бою.<br>${stats}`, 'ЗАНОВО');
+    showScreen('ВЫ ПАЛИ', 'орден помнит', stats, 'ЗАНОВО');
   }
 }
 
-screenBtn.addEventListener('click', () => {
-  if (game.state === 'paused') resume();
-  else startGame();
-});
+$('screenBtn').addEventListener('click', () => { if (game.state === 'paused') resume(); else startGame(); });
+$('restartBtn').addEventListener('click', () => startGame());
+$('menuBtn').addEventListener('click', () => pause());
+$('menuBtn').addEventListener('touchend', (e) => { e.preventDefault(); pause(); });
+document.getElementById('weaponIcon').addEventListener('touchend', (e) => { e.preventDefault(); G.weapons.cycle(1); });
 
-// Десктоп: если курсор освободили (Esc) во время боя — пауза
+// настройки
+const bind = (id, key, parse = Number) => {
+  const el = $(id);
+  if (el.type === 'checkbox') el.checked = !!settings[key]; else el.value = settings[key];
+  el.addEventListener('input', async () => {
+    settings[key] = el.type === 'checkbox' ? el.checked : parse(el.value);
+    if (key === 'gyro' && settings.gyro) { settings.gyro = await G.input.enableGyro(); el.checked = settings.gyro; }
+    applySettings();
+    saveSettings();
+  });
+};
+bind('setSens', 'sens'); bind('setBtnSize', 'btnSize'); bind('setBtnAlpha', 'btnAlpha'); bind('setMusic', 'music'); bind('setGyro', 'gyro');
+
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement) game.wasLocked = true;
   else if (game.wasLocked && game.state === 'playing') pause();
 });
-renderer.domElement.addEventListener('click', () => {
-  if (game.state === 'playing' && !document.pointerLockElement) lockPointer();
-});
+renderer.domElement.addEventListener('click', () => { if (game.state === 'playing' && !document.pointerLockElement) lockPointer(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
 // ---------- Размер окна ----------
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
-  const scale = Math.max(1, h / PIXEL_HEIGHT);
-  renderer.setSize(Math.round(w / scale), Math.round(h / scale), false); // canvas растягивается CSS-ом
+  renderer.setSize(w, h);
   camera.aspect = w / h;
-  // на узком (портретном) экране чуть шире обзор
-  camera.fov = w < h ? 90 : 75;
+  camera.userData.baseFov = w < h ? 92 : 76;
   camera.updateProjectionMatrix();
-  weapon.resize(w / h);
+  // пиксельный слой: ~280 "пикселей" по высоте → оружие занимает ~45% кадра, пиксели крупные и чёткие
+  overlay.height = 280;
+  overlay.width = Math.round((280 * w) / h);
+  G.fx.setScale(h * renderer.getPixelRatio());
 }
 window.addEventListener('resize', resize);
 resize();
 
 // ---------- Игровой цикл ----------
 const clock = new THREE.Clock();
+let pruneT = 0;
 
 function update(dt) {
+  const I = G.input, P = G.player;
   game.elapsed += dt;
-  const look = input.consumeLook();
-  player.look(look.x, look.y);
-  player.update(dt, input.getMove(), arena.colliders);
-  weapon.update(dt, input, player, game.time);
-  enemies.update(dt, player, camera);
-  waves.update(dt);
-  hud.update(player, weapon, waves, enemies.boss);
-
-  if (player.dead) endGame(false);
-  if (game.endT > 0) {
-    game.endT -= dt;
-    if (game.endT <= 0) endGame(true);
+  I.pollGamepad(dt);
+  if (I.take('pause')) { pause(); return; }
+  const look = I.consumeLook();
+  P.look(look.x, look.y);
+  const move = I.getMove();
+  if (I.take('jump')) P.jump();
+  if (I.take('dash')) P.dash(move);
+  P.update(dt, move);
+  for (const ev of P.events) {
+    if (ev === 'step') sfx.step(); else if (ev === 'jump') sfx.jump(); else if (ev === 'land') sfx.land(); else if (ev === 'dash') sfx.dash();
+    else if (ev === 'fall') G.hud.objectiveFlash('Пропасть! Возвращаю к последней точке.');
   }
+  P.events.length = 0;
+  P.applyCamera(camera, game.time);
+  camera.updateMatrixWorld();
+  G.weapons.update(dt, I, game.time);
+  G.enemies.update(dt, game.time);
+  G.projectiles.update(dt);
+  G.pickups.update(dt, game.time);
+  G.flow.update(dt);
+  G.hud.update(dt);
+  pruneT -= dt;
+  if (pruneT <= 0) { pruneT = 2; G.enemies.prune(); }
+  if (P.dead) endGame(false);
 }
 
 function frame() {
   requestAnimationFrame(frame);
-  const dt = Math.min(clock.getDelta(), 0.05); // не даём шагу стать огромным после паузы
+  const dt = Math.min(clock.getDelta(), 0.05);
   game.time += dt;
-
   if (game.state === 'playing') update(dt);
-  else if (game.state === 'won' || game.state === 'lost') enemies.update(dt, player, camera); // доигрываем анимации смерти
-
-  blood.update(dt);
-  sparks.update(dt);
-  tracers.update(dt);
-  gibs.update(dt);
-  explosions.update(dt);
-  arena.update(game.time);
-  muzzleT -= dt;
-  muzzleLight.intensity = muzzleT > 0 ? 60 : 0;
-  muzzleLight.position.set(player.pos.x, 1.5, player.pos.z);
-  player.applyCamera(camera, game.time);
-
-  renderer.clear();
+  else if (game.state === 'won' || game.state === 'dead') G.enemies.update(dt, game.time);
+  G.level.update(dt, game.time);
+  G.fx.update(dt, G.world, camera.position, game.time);
+  G.player.applyCamera(camera, game.time);
+  const fov = (camera.userData.baseFov || 76) * (camera.userData.fovK || 1);
+  if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   renderer.render(scene, camera);
-  renderer.clearDepth();
-  renderer.render(weapon.scene, weapon.camera);
+  if (game.state === 'playing' || game.state === 'paused') G.weapons.draw(dt, game.time);
+  else G.weapons.ctx.clearRect(0, 0, overlay.width, overlay.height);
 }
-player.applyCamera(camera, 0);
+G.player.reset(G.level.playerStart);
+G.pickups.reset();
+G.flow.reset();
+G.hud.show(false);
 frame();
 
-// Для отладки из консоли браузера (например: __game.player.health = 100)
-window.__game = { game, player, enemies, waves, weapon, input, camera, update, THREE };
+// Для отладки из консоли браузера (например: __game.G.player.health = 999)
+window.__game = { G, game, update, THREE, startGame };

@@ -1,464 +1,545 @@
-// Враги: модели из коробок, ИИ (ближний, дальний, чемпион), снаряды, урон по игроку.
+// Враги: фанатик (бегун), стрелок, тяжёлый демон (рывок), босс «Колосс» с тремя фазами.
+// Каждый — пиксельный спрайт-билборд (лист кадров из art_chars.js), невидимый хитбокс и тень.
 import * as THREE from 'three';
-import { resolveCircle, pointInColliders } from './collision.js';
-import { ARENA_HALF } from './arena.js';
+import { enemySheet } from './art_chars.js';
+import { nearestTexture } from './pixel.js';
 import { sfx } from './audio.js';
-import { enemyAtlas, plasmaTexture, SPRITE_FRAMES } from './sprites.js';
 
-// Характеристики типов врагов
-const TYPES = {
-  melee: { hp: 60, speed: 4.6, radius: 0.45, scale: 1, color: 0x6a2420, dark: 0x2a1a18,
-    damage: 10, range: 1.6, windup: 0.35, cooldown: 1.0 },
-  ranged: { hp: 45, speed: 3.0, radius: 0.45, scale: 1, color: 0x3e4634, dark: 0x22261e,
-    fireDelay: 2.3, projSpeed: 10, projDamage: 8, keepMin: 8, keepMax: 15 },
-  boss: { hp: 700, speed: 3.2, radius: 0.95, scale: 1.8, color: 0x4a1616, dark: 0x5a4428,
-    damage: 22, range: 2.6, windup: 0.5, cooldown: 1.4,
-    fireDelay: 1.3, burst: 3, projSpeed: 13, projDamage: 9 },
+export const TYPES = {
+  fanatic: { hp: 55, speed: 7.4, radius: 0.42, height: 1.85, px: 0.022, dmg: 9, range: 1.7, windup: 0.26, cooldown: 0.75, walkFps: 11 },
+  gunner: { hp: 70, speed: 3.6, radius: 0.42, height: 1.85, px: 0.022, fireDelay: 1.9, burst: 3, bulletDmg: 6, keepMin: 7, keepMax: 16, walkFps: 7, muzzle: [0.42, 1.12] },
+  heavy: { hp: 420, speed: 2.5, radius: 0.85, height: 2.8, px: 0.024, dmg: 26, range: 2.7, windup: 0.42, cooldown: 1.3, walkFps: 6 },
+  boss: { hp: 3200, speed: 2.7, radius: 1.6, height: 6.0, px: 0.034, dmg: 32, range: 4.2, windup: 0.55, cooldown: 1.6, walkFps: 5, muzzle: [-2.07, 2.2] },
 };
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
-const HIDDEN_MAT = new THREE.MeshBasicMaterial();
-const tmpV = new THREE.Vector3();
-// Размер спрайта в метрах на один пиксель
-const PIXEL = { melee: 0.047, ranged: 0.047, boss: 0.062 };
-
-// Враг — плоский пиксельный спрайт, всегда повёрнутый к камере (как в шутерах 90-х)
-function buildModel(type) {
-  const atlas = enemyAtlas(type);
-  const g = new THREE.Group();
-  const map = new THREE.CanvasTexture(atlas.canvas);
-  map.magFilter = map.minFilter = THREE.NearestFilter;
-  map.generateMipmaps = false;
-  map.colorSpace = THREE.SRGBColorSpace;
-  map.repeat.set(1 / SPRITE_FRAMES, 1);
-  // emissiveMap = та же текстура: спрайт немного "светится" своими цветами и не тонет в темноте
-  const mat = new THREE.MeshLambertMaterial({ map, emissiveMap: map, emissive: 0x383030, alphaTest: 0.5, side: THREE.DoubleSide });
-  const w = atlas.frameW * PIXEL[type], h = atlas.frameH * PIXEL[type];
-  const geo = new THREE.PlaneGeometry(w, h);
-  geo.translate(0, h / 2, 0);
-  const sprite = new THREE.Mesh(geo, mat);
-  g.add(sprite);
-
-  // Невидимый хитбокс для попаданий
-  const hitbox = new THREE.Mesh(BOX, HIDDEN_MAT);
-  hitbox.visible = false;
-  hitbox.scale.set(w * 0.75, h * 0.95, w * 0.75);
-  hitbox.position.y = h * 0.475;
-  g.add(hitbox);
-  return { group: g, sprite, map, mats: [mat], hitbox, height: h };
-}
+const HIDDEN = new THREE.MeshBasicMaterial();
+const SHADOW_GEO = new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2);
+const SHADOW_MAT = new THREE.MeshBasicMaterial({ color: 0x1a2030, transparent: true, opacity: 0.32, depthWrite: false });
+// Маршруты на платформу: низ лестницы -> верх
+const STAIRS = [{ bottom: { x: 0, z: -6.4 }, top: { x: 0, z: -12 } }, { bottom: { x: -16.6, z: -16 }, top: { x: -11.4, z: -16 } }];
 
 export class Enemies {
-  // fx: { blood, sparks, gibs, decals, explosions }; hooks: { onKill(enemy), onPlayerHit(amount) }
-  constructor(scene, colliders, solidMeshes, fx, hooks) {
-    this.scene = scene;
-    this.colliders = colliders;
-    this.solidMeshes = solidMeshes;
-    this.fx = fx;
-    this.particles = fx.blood;
-    this.sparks = fx.sparks;
-    this.hooks = hooks;
+  constructor(G) {
+    this.G = G;
     this.list = [];
+    this.corpses = [];
+    this.sheets = {};
+    for (const t of Object.keys(TYPES)) this.sheets[t] = enemySheet(t);
+    this.tmp = new THREE.Vector3();
+    this.camRight = new THREE.Vector3();
     this.ray = new THREE.Raycaster();
-    this.cameraPos = new THREE.Vector3();
-
-    // Пул снарядов: зелёные варп-сгустки
-    const pmat = new THREE.SpriteMaterial({ map: plasmaTexture(), fog: false, depthWrite: false });
-    this.projectiles = [];
-    for (let i = 0; i < 40; i++) {
-      const m = new THREE.Sprite(pmat);
-      m.visible = false;
-      scene.add(m);
-      this.projectiles.push({ mesh: m, active: false, vel: new THREE.Vector3(), life: 0, damage: 0 });
-    }
+    this.minionTimer = 0;
   }
 
-  get aliveCount() { return this.list.reduce((n, e) => n + (e.dead ? 0 : 1), 0); }
+  get alive() { return this.list.filter((e) => !e.dead); }
+  get aliveCount() { let n = 0; for (const e of this.list) if (!e.dead) n++; return n; }
   get boss() { return this.list.find((e) => e.type === 'boss') || null; }
 
-  spawn(type, x, z) {
-    const t = TYPES[type];
-    const model = buildModel(type);
+  spawn(type, x, y, z, { silent = false } = {}) {
+    const t = TYPES[type], sh = this.sheets[type];
+    const map = nearestTexture(sh.canvas);
+    map.repeat.set(1 / sh.count, 1);
+    const mat = new THREE.MeshLambertMaterial({ map, emissiveMap: map, emissive: 0x3a3434, alphaTest: 0.5, side: THREE.DoubleSide });
+    const w = sh.w * t.px, h = sh.h * t.px;
+    const geo = new THREE.PlaneGeometry(w, h);
+    geo.translate(0, h / 2 - 3 * t.px, 0);
+    const sprite = new THREE.Mesh(geo, mat);
+    const group = new THREE.Group();
+    group.add(sprite);
+    const hitbox = new THREE.Mesh(BOX, HIDDEN);
+    hitbox.visible = false;
+    hitbox.scale.set(t.radius * 2, t.height, t.radius * 2);
+    hitbox.position.y = t.height / 2;
+    group.add(hitbox);
+    const shadow = new THREE.Mesh(SHADOW_GEO, SHADOW_MAT);
+    shadow.scale.setScalar(t.radius * 1.3);
+    shadow.position.y = 0.02;
+    group.add(shadow);
+    group.position.set(x, y, z);
+    this.G.scene.add(group);
     const e = {
-      type, t, ...model,
-      pos: { x, z }, yaw: 0, hp: t.hp, maxHp: t.hp, radius: t.radius,
-      dead: false, deathT: 0, spawnT: 0, flashT: 0,
-      cooldown: 0.5, attackT: 0, fireT: 1 + Math.random() * 1.5, burstLeft: 0, burstT: 0,
-      walk: Math.random() * 6, moving: false, shotT: 0, painT: 0,
-      strafe: Math.random() < 0.5 ? -1 : 1, strafeT: 1 + Math.random() * 2,
-      avoid: 0, avoidT: 0, kb: { x: 0, z: 0 },
+      type, t, sheet: sh, group, sprite, map, mat, hitbox, shadow,
+      pos: { x, y, z }, vy: 0, hp: t.hp, maxHp: t.hp, radius: t.radius, height: t.height,
+      dead: false, active: false, spawnT: 0, flashT: 0, painT: 0, stunT: 0,
+      state: 'chase', stateT: 0, cooldown: 0.6 + Math.random() * 0.6, fireT: 1 + Math.random() * 1.5, burst: 0,
+      walk: Math.random() * 4, moving: false, strafe: Math.random() < 0.5 ? -1 : 1, strafeT: 1 + Math.random() * 2,
+      avoid: 0, avoidT: 0, kb: { x: 0, z: 0 }, chargeDir: null, deathT: 0, flip: Math.random() < 0.5,
+      cryT: 2 + Math.random() * 4, phase: 1, summonT: 10, spiralT: 6, attackKind: null, frame: 0,
     };
-    e.hitbox.userData.enemy = e;
-    e.group.position.set(x, 0, z);
-    e.group.scale.set(1, 0.01, 1);
-    this.scene.add(e.group);
+    hitbox.userData.enemy = e;
     this.list.push(e);
-    // эффект появления: столб красных искр
-    // эффект появления: столб зелёных варп-искр
-    this.sparks.burst({ x, y: 0.5, z }, type === 'boss' ? 90 : 35, 0x60ff40, { speed: 5, life: 0.8, gravity: -3, dir: { x: 0, y: 2, z: 0 } });
+    if (!silent) this.spawnFx(x, y, z, type === 'boss' ? 3 : type === 'heavy' ? 1.6 : 1);
     return e;
   }
 
-  // Меши для лучей выстрелов игрока
+  // Эффект появления: тёмно-багровый варп-всплеск
+  spawnFx(x, y, z, k) {
+    const fx = this.G.fx, p = { x, y: y + 0.6 * k, z };
+    fx.sparks.burst(p, Math.round(40 * k), 0xc040ff, { speed: 5 * k, life: 0.8, gravity: -3, size: 0.08, up: 1.5 });
+    fx.dust.burst(p, Math.round(12 * k), 0x40204a, { speed: 2, life: 1.0, gravity: -1, size: 0.5 * k, alpha: 0.7 });
+    fx.halos.spawn(p, 0xa040ff, 3.5 * k, 0.4);
+    fx.lights.flash(p, 0xa050ff, 25 * k, 0.3, 8);
+    sfx.spawn(this.volumeAt(p));
+  }
+
   hitboxes() {
     const out = [];
     for (const e of this.list) {
-      if (e.dead || e.spawnT <= 0.3) continue;
-      e.group.updateMatrixWorld(); // позиция могла измениться после последней отрисовки
+      if (e.dead || !e.active) continue;
+      e.group.updateMatrixWorld();
       out.push(e.hitbox);
     }
     return out;
   }
 
-  // Урон врагу. Возвращает true, если враг убит
-  damage(e, amount, point) {
-    if (e.dead) return false;
+  // Враг, в цилиндр которого попала точка (для снарядов)
+  hitTest(p, r) {
+    for (const e of this.list) {
+      if (e.dead || !e.active) continue;
+      const dx = p.x - e.pos.x, dz = p.z - e.pos.z;
+      if (dx * dx + dz * dz < (e.radius + r) ** 2 && p.y > e.pos.y - r && p.y < e.pos.y + e.height + r) return e;
+    }
+    return null;
+  }
+
+  volumeAt(p) {
+    const P = this.G.player.pos;
+    return Math.max(0.12, 1 - Math.hypot(p.x - P.x, p.z - P.z) / 40);
+  }
+
+  // Урон врагу. source: 'rifle' | 'shotgun' | 'plasma' | 'thermal' | 'chainblade' | 'grenade' | 'barrel'
+  damage(e, amount, point, source, dir = null) {
+    if (e.dead || !e.active) return false;
+    const G = this.G;
     e.hp -= amount;
-    e.flashT = 0.12;
-    e.painT = 0.15;
-    this.particles.burst(point, 12, 0xd01010, { speed: 4, life: 0.6 });
+    e.flashT = 0.08;
+    const small = source === 'thermal';
+    if (!small || Math.random() < 0.15) G.fx.bloodBurst(point, e.type === 'boss' ? 0.6 : 0.8, dir ? { x: dir.x * 2, y: 1, z: dir.z * 2 } : null);
+    if (source === 'thermal' && Math.random() < 0.3) G.fx.sparks.burst(point, 3, 0xffa040, { speed: 2, life: 0.4, gravity: -2, size: 0.06 });
+    // брызги на стену за врагом
+    if (dir && !small && Math.random() < 0.5) this.wallSplat(point, dir);
+    // реакция на попадание
+    if (e.type !== 'boss' && (e.type !== 'heavy' || Math.random() < 0.25) && amount >= 10) {
+      e.painT = 0.14;
+      e.stunT = e.type === 'heavy' ? 0.15 : 0.1;
+      if (Math.random() < 0.3) sfx.enemyPain(e.type, this.volumeAt(e.pos));
+    }
     if (e.hp > 0) return false;
-    e.dead = true;
-    e.deathT = 0;
-    if (e.type !== 'boss') this.explodeBody(e, 1);
-    else sfx.explosion(0.8);
-    this.hooks.onKill(e);
+    this.kill(e, source, amount);
     return true;
   }
 
-  // Тело разлетается на куски: гибы, кровь, лужа на полу
-  explodeBody(e, k) {
-    const c = { x: e.pos.x, y: e.height * 0.55, z: e.pos.z };
-    this.fx.gibs.burst(c, Math.round(9 * k), 6 * Math.sqrt(k), 0.24 * Math.sqrt(k));
-    this.particles.burst(c, Math.round(40 * k), 0xc01010, { speed: 7 * Math.sqrt(k), life: 1.0 });
-    this.fx.explosions.spawn(new THREE.Vector3(c.x, c.y, c.z), 1.6 * Math.sqrt(k), 0.35);
-    this.fx.decals.add(e.pos.x, e.pos.z, 1.6 * k + Math.random());
+  wallSplat(point, dir) {
+    const G = this.G;
+    this.ray.set(this.tmp.set(point.x, point.y, point.z), new THREE.Vector3(dir.x, dir.y || 0, dir.z).normalize());
+    this.ray.far = 3.5;
+    const h = this.ray.intersectObjects(G.level.solid, false)[0];
+    if (h && h.face) G.fx.decals.add(h.point, h.face.normal.clone().transformDirection(h.object.matrixWorld), 1 + Math.random() * 1.2);
+  }
+
+  kill(e, source, amount) {
+    const G = this.G;
+    e.dead = true;
+    e.deathT = 0;
+    e.hitbox.visible = false;
+    const c = { x: e.pos.x, y: e.pos.y + e.height * 0.5, z: e.pos.z };
+    const explosive = source === 'grenade' || source === 'plasma' || source === 'barrel' || source === 'rifle';
+    // разрыв на куски: взрывом, при большом перебитии, или клинком/дробью вблизи
+    e.gibbed = e.type !== 'boss' && (explosive && (e.hp < -12 || Math.random() < 0.45)) || (e.type === 'fanatic' && (source === 'chainblade' || source === 'shotgun') && Math.random() < 0.5);
+    if (e.type === 'boss') { e.gibbed = false; sfx.bossDeath(); }
+    else sfx.enemyDeath(e.type, this.volumeAt(e.pos));
+    if (e.gibbed) this.gib(e);
+    else G.fx.bloodBurst(c, 1.2);
+    const gy = G.world.groundAt(e.pos.x, e.pos.z, e.pos.y + 0.3, 0.2, true);
+    G.fx.decals.floor(e.pos.x, gy + 0.01, e.pos.z, e.type === 'heavy' ? 3.2 : 2.2 + Math.random());
+    G.onEnemyKilled(e);
+  }
+
+  gib(e) {
+    const G = this.G, c = { x: e.pos.x, y: e.pos.y + e.height * 0.5, z: e.pos.z };
+    const k = e.type === 'heavy' ? 2 : e.type === 'boss' ? 4 : 1;
+    G.fx.gibs.burst(c, 8 * k, 7, 0.35 * Math.sqrt(k), e.pos.y);
+    G.fx.bloodBurst(c, 2.5 * k);
+    G.fx.blood.burst(c, 30 * k, 0xc8141c, { speed: 10, life: 1.2, gravity: 16, size: 0.13, sizeVar: 1.6, up: 0.6 });
     e.sprite.visible = false;
-    sfx.enemyDeath(1);
+    e.shadow.visible = false;
   }
 
-  // Отбросить врага (удар в ближнем бою)
-  knockback(e, dx, dz, force) {
-    e.kb.x += dx * force;
-    e.kb.z += dz * force;
-  }
+  knockback(e, dx, dz, force) { e.kb.x += dx * force; e.kb.z += dz * force; }
 
-  // Видит ли враг игрока (нет ли стены между ними)
-  canSee(e, player) {
-    const from = tmpV.set(e.pos.x, 1.4, e.pos.z);
-    const dx = player.pos.x - e.pos.x, dz = player.pos.z - e.pos.z;
-    const dist = Math.hypot(dx, dz);
-    this.ray.set(from, new THREE.Vector3(dx / dist, 0.01, dz / dist));
+  // Видно ли игрока из точки (луч по геометрии уровня)
+  canSee(from, to) {
+    const d = this.tmp.set(to.x - from.x, to.y - from.y, to.z - from.z);
+    const dist = d.length();
+    this.ray.set(new THREE.Vector3(from.x, from.y, from.z), d.normalize());
     this.ray.far = dist;
-    return this.ray.intersectObjects(this.solidMeshes, false).length === 0;
+    return this.ray.intersectObjects(this.G.level.solid, false).length === 0;
   }
 
-  // Выпустить снаряд в игрока (angle — отклонение для очереди веером)
-  shoot(e, player, angle = 0) {
-    const p = this.projectiles.find((q) => !q.active);
-    if (!p) return;
-    const s = e.t.scale;
-    const fx = Math.sin(e.yaw), fz = Math.cos(e.yaw);
-    const sx = e.pos.x + fx * 0.6 * s + fz * 0.35 * s;
-    const sz = e.pos.z + fz * 0.6 * s - fx * 0.35 * s;
-    const sy = 1.25 * s;
-    p.mesh.position.set(sx, sy, sz);
-    const dir = tmpV.set(player.pos.x - sx, 1.3 - sy, player.pos.z - sz).normalize();
-    dir.applyAxisAngle(THREE.Object3D.DEFAULT_UP, angle);
-    p.vel.copy(dir).multiplyScalar(e.t.projSpeed);
-    p.mesh.scale.setScalar(e.type === 'boss' ? 0.75 : 0.5);
-    e.shotT = 0.15;
-    p.mesh.visible = true;
-    p.active = true;
-    p.life = 5;
-    p.damage = e.t.projDamage;
-    sfx.enemyShot(this.volumeAt(e, player));
-  }
-
-  volumeAt(e, player) {
-    const d = Math.hypot(player.pos.x - e.pos.x, player.pos.z - e.pos.z);
-    return Math.max(0.15, 1 - d / 35);
-  }
-
-  // Обход препятствий: если впереди стена — пробуем повернуть
-  steer(e, dx, dz, dt) {
-    const look = 1.0 + e.radius;
-    const blocked = (x, z) =>
-      pointInColliders(e.pos.x + x * look, 0.5, e.pos.z + z * look, this.colliders, e.radius * 0.8);
-    e.avoidT -= dt;
-    if (e.avoidT > 0 && e.avoid !== 0) {
-      const a = e.avoid;
-      const rx = dx * Math.cos(a) - dz * Math.sin(a), rz = dx * Math.sin(a) + dz * Math.cos(a);
-      if (!blocked(rx, rz)) return { x: rx, z: rz };
+  // Куда идти: напрямую к цели или через лестницу на платформу
+  goal(e, P) {
+    const PH = this.G.level.PH;
+    if (P.pos.y > PH - 0.3 && e.pos.y < 0.5 && Math.abs(P.pos.y - e.pos.y) > 0.8) {
+      const s = STAIRS.reduce((a, b) => (Math.hypot(a.bottom.x - e.pos.x, a.bottom.z - e.pos.z) < Math.hypot(b.bottom.x - e.pos.x, b.bottom.z - e.pos.z) ? a : b));
+      const db = Math.hypot(s.bottom.x - e.pos.x, s.bottom.z - e.pos.z);
+      return db > 1.5 && !e.onStairs ? s.bottom : (e.onStairs = true, s.top);
     }
+    e.onStairs = false;
+    return P.pos;
+  }
+
+  steer(e, dx, dz, dt) {
+    const W = this.G.world, look = 1.1 + e.radius;
+    const blocked = (x, z) => W.blockedFor(e.pos.x + x * look, e.pos.z + z * look, e.pos.y, e.radius * 0.8);
+    e.avoidT -= dt;
+    const rot = (a) => [dx * Math.cos(a) - dz * Math.sin(a), dx * Math.sin(a) + dz * Math.cos(a)];
+    if (e.avoidT > 0 && e.avoid) { const [rx, rz] = rot(e.avoid); if (!blocked(rx, rz)) return { x: rx, z: rz }; }
     if (!blocked(dx, dz)) { e.avoid = 0; return { x: dx, z: dz }; }
-    for (const a of [0.8, -0.8, 1.6, -1.6, 2.4, -2.4]) {
-      const rx = dx * Math.cos(a) - dz * Math.sin(a), rz = dx * Math.sin(a) + dz * Math.cos(a);
-      if (!blocked(rx, rz)) { e.avoid = a; e.avoidT = 0.6; return { x: rx, z: rz }; }
+    for (const a of [0.7, -0.7, 1.4, -1.4, 2.1, -2.1, 2.8]) {
+      const [rx, rz] = rot(a * (e.strafe || 1));
+      if (!blocked(rx, rz)) { e.avoid = a * (e.strafe || 1); e.avoidT = 0.7; return { x: rx, z: rz }; }
     }
     return { x: dx, z: dz };
   }
 
-  update(dt, player, camera) {
-    if (camera) this.cameraPos.copy(camera.position);
+  update(dt, time) {
+    const G = this.G, P = G.player, cam = G.camera;
+    this.camRight.set(1, 0, 0).applyQuaternion(cam.quaternion);
     for (const e of this.list) {
-      if (e.dead) { this.animateDeath(e, dt); continue; }
-
-      // появление: враг "вырастает" из пола, пока не действует
-      if (e.spawnT < 0.5) {
+      if (e.dead) { this.updateDeath(e, dt, time); continue; }
+      // появление: враг "вырастает" из варп-всплеска
+      if (!e.active) {
         e.spawnT += dt;
-        const k = Math.min(1, e.spawnT / 0.5);
-        e.group.scale.set(1, Math.max(0.01, k), 1);
-        e.group.position.set(e.pos.x, 0, e.pos.z);
-        e.group.rotation.y = Math.atan2(this.cameraPos.x - e.pos.x, this.cameraPos.z - e.pos.z);
+        e.group.scale.set(1, Math.min(1, e.spawnT / 0.45), 1);
+        if (e.spawnT >= 0.45) e.active = true;
+        this.place(e, cam);
         continue;
       }
-
-      const dx = player.pos.x - e.pos.x, dz = player.pos.z - e.pos.z;
-      const dist = Math.hypot(dx, dz) || 0.001;
-      const nx = dx / dist, nz = dz / dist;
-      let mx = 0, mz = 0, speedMul = 1;
-      e.cooldown -= dt;
-
-      if (e.type === 'melee') {
-        ({ mx, mz } = this.meleeLogic(e, player, dist, nx, nz, dt));
-      } else if (e.type === 'ranged') {
-        ({ mx, mz, speedMul } = this.rangedLogic(e, player, dist, nx, nz, dt));
-      } else {
-        ({ mx, mz, speedMul } = this.bossLogic(e, player, dist, nx, nz, dt));
+      e.flashT -= dt; e.painT -= dt; e.stunT -= dt; e.cooldown -= dt; e.stateT += dt;
+      e.cryT -= dt;
+      if (e.cryT <= 0) { e.cryT = 3 + Math.random() * 5; sfx.enemyCry(e.type, this.volumeAt(e.pos)); }
+      const tgt = this.goal(e, P);
+      const dx = tgt.x - e.pos.x, dz = tgt.z - e.pos.z, dist = Math.hypot(dx, dz) || 0.01;
+      const pdx = P.pos.x - e.pos.x, pdz = P.pos.z - e.pos.z, pdist = Math.hypot(pdx, pdz) || 0.01;
+      const vdist = Math.abs(P.pos.y - e.pos.y);
+      let move = null, speed = e.t.speed;
+      if (e.stunT <= 0) {
+        if (e.type === 'fanatic') move = this.aiMelee(e, P, dx / dist, dz / dist, pdist, vdist, dt);
+        else if (e.type === 'gunner') ({ move, speed } = this.aiGunner(e, P, dx / dist, dz / dist, pdist, dt, speed));
+        else if (e.type === 'heavy') ({ move, speed } = this.aiHeavy(e, P, dx / dist, dz / dist, pdist, vdist, dt, speed));
+        else ({ move, speed } = this.aiBoss(e, P, dx / dist, dz / dist, pdist, vdist, dt, speed, time));
       }
-
-      // движение с обходом препятствий
-      e.moving = mx !== 0 || mz !== 0;
-      if (e.moving) {
-        const d = this.steer(e, mx, mz, dt);
-        const sp = e.t.speed * speedMul;
-        e.pos.x += d.x * sp * dt;
-        e.pos.z += d.z * sp * dt;
-        e.walk += dt * sp * 2.4;
+      e.moving = !!move;
+      if (move) {
+        const d = e.state === 'charge' ? move : this.steer(e, move.x, move.z, dt);
+        e.pos.x += d.x * speed * dt;
+        e.pos.z += d.z * speed * dt;
+        e.walk += dt * e.t.walkFps * (speed / e.t.speed);
       }
-      // отбрасывание
-      e.pos.x += e.kb.x * dt;
-      e.pos.z += e.kb.z * dt;
-      const kbDamp = Math.exp(-8 * dt);
-      e.kb.x *= kbDamp; e.kb.z *= kbDamp;
-
-      // поворот к игроку (плавно)
-      let da = Math.atan2(nx, nz) - e.yaw;
-      da = Math.atan2(Math.sin(da), Math.cos(da));
-      e.yaw += da * (1 - Math.exp(-10 * dt));
-
-      e.flashT -= dt;
-      e.shotT -= dt;
+      e.pos.x += e.kb.x * dt; e.pos.z += e.kb.z * dt;
+      const damp = Math.exp(-7 * dt);
+      e.kb.x *= damp; e.kb.z *= damp;
     }
-
-    this.separate(player);
+    this.separate(P);
     for (const e of this.list) {
-      if (e.dead) continue;
-      resolveCircle(e.pos, e.radius, this.colliders);
-      this.animate(e);
-    }
-    this.updateProjectiles(dt, player);
-
-    // убираем со сцены отыгравших смерть
-    for (let i = this.list.length - 1; i >= 0; i--) {
-      const e = this.list[i];
-      if (e.dead && e.deathT > 1.3 && !e.sprite.visible) {
-        this.scene.remove(e.group);
-        for (const m of e.mats) m.dispose();
-        e.map.dispose();
-        this.list.splice(i, 1);
-      }
+      if (e.dead || !e.active) continue;
+      G.world.resolve(e.pos, e.radius, e.height, true);
+      // гравитация и ступеньки
+      const g = G.world.groundAt(e.pos.x, e.pos.z, e.pos.y, e.radius * 0.6, true);
+      if (e.pos.y > g + 0.02) { e.vy -= 20 * dt; e.pos.y = Math.max(g, e.pos.y + e.vy * dt); } else { e.pos.y = g; e.vy = 0; }
+      this.place(e, cam);
+      this.animate(e, time);
     }
   }
 
-  // Ближний бой: бежит к игроку, замахивается и бьёт
-  meleeLogic(e, player, dist, nx, nz, dt) {
-    if (e.attackT > 0) {
-      e.attackT -= dt;
-      if (e.attackT <= 0) {
-        if (dist < e.t.range + 0.5) this.hooks.onPlayerHit(e.t.damage, e);
-        e.cooldown = e.t.cooldown;
-      }
-      return { mx: nx * 0.15, mz: nz * 0.15 }; // во время замаха почти стоит
-    }
-    if (dist < e.t.range + e.radius && e.cooldown <= 0) {
-      e.attackT = e.t.windup;
-      sfx.enemyMelee(this.volumeAt(e, player));
-      return { mx: 0, mz: 0 };
-    }
-    if (dist < e.t.range) return { mx: 0, mz: 0 };
-    return { mx: nx, mz: nz };
+  place(e, cam) {
+    e.group.position.set(e.pos.x, e.pos.y, e.pos.z);
+    e.group.rotation.y = Math.atan2(cam.position.x - e.pos.x, cam.position.z - e.pos.z);
   }
 
-  // Дальний бой: держит дистанцию, ходит боком, стреляет медленными снарядами
-  rangedLogic(e, player, dist, nx, nz, dt) {
+  // Ближний бой: несётся к игроку, замах, удар
+  aiMelee(e, P, nx, nz, pdist, vdist, dt) {
+    if (e.state === 'attack') {
+      if (e.stateT >= e.t.windup) {
+        if (pdist < e.t.range + 0.6 && vdist < 1.5) this.G.hurtPlayer(e.t.dmg, e.pos);
+        e.state = 'chase'; e.stateT = 0; e.cooldown = e.t.cooldown;
+        sfx.enemySwing(this.volumeAt(e.pos));
+      }
+      return null;
+    }
+    if (pdist < e.t.range + e.radius && vdist < 1.5 && e.cooldown <= 0) { e.state = 'attack'; e.stateT = 0; return null; }
+    if (pdist < e.t.range * 0.8 && vdist < 1.5) return null;
+    return { x: nx, z: nz };
+  }
+
+  // Стрелок: держит дистанцию, ходит боком, стреляет очередями
+  aiGunner(e, P, nx, nz, pdist, dt, speed) {
+    const G = this.G;
     e.strafeT -= dt;
-    if (e.strafeT <= 0) { e.strafe *= -1; e.strafeT = 1.5 + Math.random() * 2; }
-    const sx = -nz * e.strafe, sz = nx * e.strafe; // вектор "вбок"
-    let mx, mz, speedMul = 1;
-    e.seekT = (e.seekT || 0) - dt;
-    if (dist > e.t.keepMax || e.seekT > 0) { mx = nx; mz = nz; }
-    else if (dist < e.t.keepMin) { mx = -nx * 0.8 + sx * 0.4; mz = -nz * 0.8 + sz * 0.4; }
-    else { mx = sx; mz = sz; speedMul = 0.6; }
-
-    e.fireT -= dt;
-    if (e.fireT <= 0) {
-      if (dist < 30 && this.canSee(e, player)) {
-        this.shoot(e, player);
-        e.fireT = e.t.fireDelay * (0.8 + Math.random() * 0.4);
-      } else {
-        e.fireT = 0.4;  // не видит — проверим позже,
-        e.seekT = 1.2;  // а пока идёт к игроку
+    if (e.strafeT <= 0) { e.strafe *= -1; e.strafeT = 1.4 + Math.random() * 2; }
+    if (e.state === 'shoot') {
+      if (e.stateT > 0.32) {
+        e.stateT = 0;
+        e.burst--;
+        const m = this.muzzlePos(e);
+        G.projectiles.enemyShot('bullet', m, { x: P.pos.x, y: P.pos.y + 1.2, z: P.pos.z }, { speed: 24, dmg: e.t.bulletDmg, spread: 0.06 });
+        G.fx.lights.flash(m, 0xffa040, 30, 0.08, 9);
+        G.fx.halos.spawn(m, 0xffb040, 1.6, 0.09);
+        e.shotT = 0.09;
+        sfx.enemyShot(this.volumeAt(e.pos));
+        if (e.burst <= 0) { e.state = 'chase'; e.fireT = e.t.fireDelay * (0.8 + Math.random() * 0.5); }
       }
+      return { move: null, speed };
     }
-    return { mx, mz, speedMul };
+    e.fireT -= dt;
+    let mx, mz;
+    const sx = -nz * e.strafe, sz = nx * e.strafe;
+    if (pdist > e.t.keepMax || e.seekT > 0) { mx = nx; mz = nz; }
+    else if (pdist < e.t.keepMin) { mx = -nx * 0.8 + sx * 0.5; mz = -nz * 0.8 + sz * 0.5; }
+    else { mx = sx; mz = sz; speed *= 0.7; }
+    e.seekT = (e.seekT || 0) - dt;
+    if (e.fireT <= 0) {
+      const eye = { x: e.pos.x, y: e.pos.y + 1.5, z: e.pos.z };
+      if (pdist < 32 && this.canSee(eye, { x: P.pos.x, y: P.pos.y + 1.4, z: P.pos.z })) { e.state = 'shoot'; e.stateT = 0.1; e.burst = e.t.burst; }
+      else { e.fireT = 0.5; e.seekT = 1.5; }
+    }
+    return { move: { x: mx, z: mz }, speed };
   }
 
-  // Чемпион: идёт на игрока, стреляет очередями веером, бьёт вблизи
-  bossLogic(e, player, dist, nx, nz, dt) {
-    // удар вблизи
-    if (e.attackT > 0) {
-      e.attackT -= dt;
-      if (e.attackT <= 0) {
-        if (dist < e.t.range + 0.6) {
-          this.hooks.onPlayerHit(e.t.damage, e);
-          player.vel.x += nx * 12; player.vel.z += nz * 12; // отбрасывает игрока
+  // Тяжёлый демон: медленный, живучий, рывок-таран
+  aiHeavy(e, P, nx, nz, pdist, vdist, dt, speed) {
+    const G = this.G;
+    if (e.state === 'charge') {
+      if (e.stateT > 1.0 || G.world.blockedFor(e.pos.x + e.chargeDir.x * 1.5, e.pos.z + e.chargeDir.z * 1.5, e.pos.y, e.radius * 0.7)) {
+        e.state = 'recover'; e.stateT = 0;
+        G.player.addTrauma(Math.max(0, 0.4 - pdist / 30));
+        return { move: null, speed };
+      }
+      if (pdist < e.radius + 0.9 && vdist < 1.5 && !e.chargeHit) {
+        e.chargeHit = true;
+        G.hurtPlayer(e.t.dmg, e.pos);
+        G.player.vel.x += e.chargeDir.x * 14; G.player.vel.z += e.chargeDir.z * 14; G.player.vel.y = 4;
+      }
+      return { move: e.chargeDir, speed: 13 };
+    }
+    if (e.state === 'recover') { if (e.stateT > 0.7) { e.state = 'chase'; e.cooldown = 2.5; } return { move: null, speed }; }
+    if (e.state === 'attack') {
+      if (e.stateT >= e.t.windup) {
+        if (pdist < e.t.range + 0.8 && vdist < 2) this.G.hurtPlayer(e.t.dmg, e.pos);
+        e.state = 'chase'; e.stateT = 0; e.cooldown = e.t.cooldown;
+        sfx.enemySwing(this.volumeAt(e.pos));
+      }
+      return { move: null, speed };
+    }
+    if (pdist < e.t.range + e.radius && vdist < 2 && e.cooldown <= 0) { e.state = 'attack'; e.stateT = 0; return { move: null, speed }; }
+    if (pdist > 5 && pdist < 14 && vdist < 1 && e.cooldown <= 0 && this.canSee({ x: e.pos.x, y: e.pos.y + 1.5, z: e.pos.z }, { x: P.pos.x, y: P.pos.y + 1, z: P.pos.z })) {
+      const ddx = P.pos.x - e.pos.x, ddz = P.pos.z - e.pos.z, l = Math.hypot(ddx, ddz);
+      e.state = 'charge'; e.stateT = 0; e.chargeDir = { x: ddx / l, z: ddz / l }; e.chargeHit = false;
+      sfx.heavyRoar(this.volumeAt(e.pos));
+      return { move: null, speed };
+    }
+    return { move: { x: nx, z: nz }, speed };
+  }
+
+  // Босс: фаза 1 — веер огня и удар; фаза 2 — ракеты и призыв фанатиков; фаза 3 — ярость, спираль
+  aiBoss(e, P, nx, nz, pdist, vdist, dt, speed, time) {
+    const G = this.G, frac = e.hp / e.maxHp;
+    const phase = frac > 0.6 ? 1 : frac > 0.3 ? 2 : 3;
+    if (phase !== e.phase) {
+      e.phase = phase;
+      G.onBossPhase(phase);
+      sfx.bossRoar();
+      G.player.addTrauma(0.5);
+    }
+    const rage = phase === 3 ? 1.5 : 1;
+    speed *= phase === 3 ? 1.35 : 1;
+    if (e.state === 'attack') {
+      if (e.stateT >= e.t.windup) {
+        // удар клешнёй + ударная волна
+        if (pdist < e.t.range + 1.5) { G.hurtPlayer(e.t.dmg, e.pos); G.player.vel.x += nx * 10; G.player.vel.z += nz * 10; G.player.vel.y = 5; }
+        G.fx.dust.burst({ x: e.pos.x + nx * 2, y: e.pos.y + 0.2, z: e.pos.z + nz * 2 }, 30, 0xdde4ee, { speed: 7, life: 0.9, gravity: 2, size: 0.4, alpha: 0.8 });
+        G.player.addTrauma(0.5);
+        sfx.explosion(0.6);
+        e.state = 'chase'; e.stateT = 0; e.cooldown = e.t.cooldown / rage;
+      }
+      return { move: null, speed };
+    }
+    if (e.state === 'volley') {
+      // залп: веер огненных шаров (или ракеты во 2-й фазе)
+      if (e.stateT > 0.35 && !e.fired) {
+        e.fired = true;
+        const m = this.muzzlePos(e), target = { x: P.pos.x, y: P.pos.y + 1, z: P.pos.z };
+        if (e.attackKind === 'rockets') {
+          for (let i = 0; i < 3; i++) {
+            const off = (i - 1) * 2.5;
+            G.projectiles.enemyShot('rocket', m, { x: target.x - nz * off, y: target.y, z: target.z + nx * off }, { speed: 13, dmg: 0, spread: 0.02, splash: 3.2, splashDmg: 24, lob: 3 });
+          }
+        } else if (e.attackKind === 'spiral') {
+          for (let i = 0; i < 14; i++) {
+            const a = (i / 14) * Math.PI * 2 + time;
+            G.projectiles.enemyShot('fireball', m, { x: m.x + Math.cos(a) * 10, y: m.y - 1.2, z: m.z + Math.sin(a) * 10 }, { speed: 11, dmg: 12, spread: 0 });
+          }
+        } else {
+          const n = phase === 3 ? 7 : 5;
+          for (let i = 0; i < n; i++) {
+            const a = (i - (n - 1) / 2) * 0.14;
+            const tx = P.pos.x - e.pos.x, tz = P.pos.z - e.pos.z;
+            const rx = tx * Math.cos(a) - tz * Math.sin(a), rz = tx * Math.sin(a) + tz * Math.cos(a);
+            G.projectiles.enemyShot('fireball', m, { x: e.pos.x + rx, y: target.y, z: e.pos.z + rz }, { speed: 14 * (phase === 3 ? 1.2 : 1), dmg: 12, spread: 0 });
+          }
         }
-        e.cooldown = e.t.cooldown;
+        G.fx.lights.flash(m, 0xff8030, 60, 0.15, 16);
+        G.fx.halos.spawn(m, 0xffa040, 4, 0.15);
+        e.shotT = 0.15;
+        sfx.bossShot();
       }
-      return { mx: 0, mz: 0, speedMul: 0 };
+      if (e.stateT > 0.75) { e.state = 'chase'; e.stateT = 0; }
+      return { move: null, speed };
     }
-    if (dist < e.t.range + e.radius && e.cooldown <= 0) {
-      e.attackT = e.t.windup;
-      sfx.enemyMelee(1);
-      return { mx: 0, mz: 0, speedMul: 0 };
-    }
-
-    // очередь из 3 снарядов веером
-    if (e.burstLeft > 0) {
-      e.burstT -= dt;
-      if (e.burstT <= 0) {
-        const angle = (e.burstLeft - 2) * 0.13;
-        this.shoot(e, player, angle);
-        e.burstLeft--;
-        e.burstT = 0.14;
-      }
-    } else {
-      e.fireT -= dt;
-      if (e.fireT <= 0 && dist > 3.5 && this.canSee(e, player)) {
-        e.burstLeft = e.t.burst;
-        e.burstT = 0;
-        e.fireT = e.t.fireDelay * (0.8 + Math.random() * 0.4);
+    // призыв фанатиков во 2-й и 3-й фазе
+    if (phase >= 2) {
+      e.summonT -= dt;
+      if (e.summonT <= 0) {
+        e.summonT = phase === 3 ? 11 : 14;
+        if (this.aliveCount < 9) for (let i = 0; i < 3; i++) {
+          const a = Math.random() * Math.PI * 2;
+          G.flow.spawnAt('fanatic', e.pos.x + Math.cos(a) * 3, e.pos.y, e.pos.z + Math.sin(a) * 3);
+        }
       }
     }
-
+    if (pdist < e.t.range + e.radius && vdist < 3 && e.cooldown <= 0) { e.state = 'attack'; e.stateT = 0; return { move: null, speed }; }
+    e.fireT -= dt * rage;
+    if (e.fireT <= 0 && pdist > 4) {
+      e.state = 'volley'; e.stateT = 0; e.fired = false;
+      e.spiralT -= 1;
+      e.attackKind = phase === 3 && e.spiralT <= 0 ? 'spiral' : phase >= 2 && Math.random() < 0.45 ? 'rockets' : 'fan';
+      if (e.attackKind === 'spiral') e.spiralT = 3;
+      e.fireT = 2.2;
+      return { move: null, speed };
+    }
     e.strafeT -= dt;
     if (e.strafeT <= 0) { e.strafe *= -1; e.strafeT = 2 + Math.random() * 2; }
-    const sx = -nz * e.strafe, sz = nx * e.strafe;
-    if (dist > 6) return { mx: nx * 0.8 + sx * 0.3, mz: nz * 0.8 + sz * 0.3, speedMul: 1 };
-    return { mx: nx, mz: nz, speedMul: 1.3 }; // рядом — рывок
+    if (pdist > 9) return { move: { x: nx, z: nz }, speed };
+    return { move: { x: -nz * e.strafe * 0.8 + nx * 0.3, z: nx * e.strafe * 0.8 + nz * 0.3 }, speed: speed * 0.8 };
   }
 
-  // Враги не налезают друг на друга и на игрока
-  separate(player) {
+  // Точка дула в мире: смещение спрайта вправо (вдоль камеры) и вверх
+  muzzlePos(e) {
+    const [side, up] = e.t.muzzle;
+    return new THREE.Vector3(e.pos.x + this.camRight.x * side, e.pos.y + up, e.pos.z + this.camRight.z * side);
+  }
+
+  separate(P) {
     const L = this.list;
     for (let i = 0; i < L.length; i++) {
       const a = L[i];
-      if (a.dead) continue;
+      if (a.dead || !a.active) continue;
       for (let j = i + 1; j < L.length; j++) {
         const b = L[j];
-        if (b.dead) continue;
-        pushApart(a.pos, b.pos, a.radius + b.radius, 0.5);
+        if (b.dead || !b.active || Math.abs(a.pos.y - b.pos.y) > 1.5) continue;
+        const dx = b.pos.x - a.pos.x, dz = b.pos.z - a.pos.z, d = Math.hypot(dx, dz), min = a.radius + b.radius;
+        if (d >= min || d < 1e-4) continue;
+        const k = ((min - d) / d) * 0.5;
+        const wa = a.type === 'boss' ? 0.1 : 1, wb = b.type === 'boss' ? 0.1 : 1;
+        a.pos.x -= dx * k * wa; a.pos.z -= dz * k * wa;
+        b.pos.x += dx * k * wb; b.pos.z += dz * k * wb;
       }
-      // с игроком: враг сдвигается сильнее
-      const dx = a.pos.x - player.pos.x, dz = a.pos.z - player.pos.z;
-      const d = Math.hypot(dx, dz), min = a.radius + player.radius;
-      if (d < min && d > 1e-4) {
-        const push = (min - d) / d;
-        a.pos.x += dx * push * 0.7; a.pos.z += dz * push * 0.7;
-        player.pos.x -= dx * push * 0.3; player.pos.z -= dz * push * 0.3;
+      const dx = a.pos.x - P.pos.x, dz = a.pos.z - P.pos.z, d = Math.hypot(dx, dz), min = a.radius + P.radius;
+      if (d < min && d > 1e-4 && Math.abs(a.pos.y - P.pos.y) < 1.6) {
+        const k = (min - d) / d;
+        const wa = a.type === 'boss' ? 0.05 : 0.7;
+        a.pos.x += dx * k * wa; a.pos.z += dz * k * wa;
+        P.pos.x -= dx * k * (1 - wa); P.pos.z -= dz * k * (1 - wa);
       }
     }
   }
 
-  // Спрайт всегда смотрит на камеру; кадры меняются с низкой частотой — "дёрганая" ретро-анимация
-  animate(e) {
-    const g = e.group;
-    g.position.set(e.pos.x, 0, e.pos.z);
-    g.rotation.y = Math.atan2(this.cameraPos.x - e.pos.x, this.cameraPos.z - e.pos.z);
-    let frame = e.moving ? Math.floor(e.walk / 1.6) % 2 : 0;
-    if (e.attackT > 0) frame = e.type === 'boss' || e.attackT >= e.t.windup * 0.3 ? 2 : 3;
-    if (e.shotT > 0) frame = 3;
-    else if (e.type === 'ranged' && e.fireT < 0.35) frame = 2; // целится перед выстрелом
-    e.map.offset.x = frame / SPRITE_FRAMES;
-    // боль — красная вспышка
-    const pain = e.flashT > 0;
-    e.mats[0].emissive.setRGB(pain ? 1.2 : 0.22, pain ? 0.15 : 0.18, pain ? 0.1 : 0.18);
+  // Выбор кадра анимации
+  animate(e, time) {
+    const sh = e.sheet;
+    let f = sh.walk[Math.floor(e.walk) % 4];
+    if (!e.moving) f = sh.walk[0];
+    if (e.type === 'fanatic' && e.state === 'attack') f = e.stateT < e.t.windup * 0.7 ? sh.attack[0] : sh.attack[1];
+    if (e.type === 'gunner') {
+      if (e.state === 'shoot') f = e.shotT > 0 ? sh.attack[1] : sh.attack[0];
+      else if (e.fireT < 0.3) f = sh.attack[0];
+    }
+    if (e.type === 'heavy') {
+      if (e.state === 'attack') f = e.stateT < e.t.windup * 0.7 ? sh.attack[0] : sh.attack[1];
+      if (e.state === 'charge') f = sh.attack[2];
+      if (e.state === 'recover') f = sh.hit;
+    }
+    if (e.type === 'boss') {
+      if (e.state === 'volley') f = e.shotT > 0 ? sh.attack[1] : sh.attack[0];
+      if (e.state === 'attack') f = sh.attack[2];
+    }
+    e.shotT = (e.shotT || 0) - 1 / 60;
+    if (e.painT > 0) f = sh.hit;
+    e.frame = f;
+    this.setFrame(e, f);
+    // вспышка от попадания и ярость босса
+    const fl = e.flashT > 0;
+    const rage = e.type === 'boss' && e.phase === 3 ? 0.25 + Math.sin(time * 10) * 0.15 : 0;
+    e.mat.emissive.setRGB(fl ? 1 : 0.23 + rage, fl ? 0.9 : 0.2, fl ? 0.85 : 0.2);
   }
 
-  animateDeath(e, dt) {
+  setFrame(e, f) {
+    const n = e.sheet.count;
+    if (e.flip) { e.map.repeat.x = -1 / n; e.map.offset.x = (f + 1) / n; }
+    else { e.map.repeat.x = 1 / n; e.map.offset.x = f / n; }
+  }
+
+  // Смерть: 4 кадра падения, потом труп остаётся. Босс — серия взрывов.
+  updateDeath(e, dt, time) {
+    const G = this.G;
     e.deathT += dt;
-    if (e.type !== 'boss' || !e.sprite.visible) return;
-    // чемпион: серия взрывов по телу, потом разлетается
-    e.group.rotation.y = Math.atan2(this.cameraPos.x - e.pos.x, this.cameraPos.z - e.pos.z);
-    e.mats[0].emissive.setRGB(Math.random() < 0.5 ? 1.2 : 0.2, 0.15, 0.1);
-    e.boomT = (e.boomT || 0) - dt;
-    if (e.boomT <= 0) {
-      e.boomT = 0.12;
-      const p = new THREE.Vector3(e.pos.x + (Math.random() - 0.5) * 2, 0.5 + Math.random() * 3, e.pos.z + (Math.random() - 0.5) * 2);
-      this.fx.explosions.spawn(p, 1.4 + Math.random(), 0.35);
-      sfx.impact(1);
-    }
-    if (e.deathT > 1.1) {
-      this.explodeBody(e, 3);
-      sfx.explosion(1);
-    }
-  }
-
-  updateProjectiles(dt, player) {
-    for (const p of this.projectiles) {
-      if (!p.active) continue;
-      const pos = p.mesh.position;
-      pos.addScaledVector(p.vel, dt);
-      p.life -= dt;
-      // попадание в игрока
-      const dx = pos.x - player.pos.x, dz = pos.z - player.pos.z;
-      if (dx * dx + dz * dz < 0.6 * 0.6 && pos.y > 0.1 && pos.y < 2.0) {
-        this.hooks.onPlayerHit(p.damage, null);
-        this.kill(p);
-        continue;
+    if (e.type === 'boss' && e.deathT < 2.4) {
+      e.boomT = (e.boomT || 0) - dt;
+      if (e.boomT <= 0) {
+        e.boomT = 0.18;
+        const p = { x: e.pos.x + (Math.random() - 0.5) * 3, y: e.pos.y + 1 + Math.random() * 4, z: e.pos.z + (Math.random() - 0.5) * 3 };
+        G.fx.explosions.spawn(p, 2.5 + Math.random() * 2, 0.6);
+        G.fx.bloodBurst(p, 0.8);
+        sfx.explosion(0.8);
+        G.player.addTrauma(0.2);
       }
-      // в стену, в пол или улетел
-      if (p.life <= 0 || pos.y < 0.05 || Math.abs(pos.x) > ARENA_HALF || Math.abs(pos.z) > ARENA_HALF ||
-          pointInColliders(pos.x, pos.y, pos.z, this.colliders)) {
-        this.kill(p);
-      }
+      this.setFrame(e, Math.random() < 0.5 ? e.sheet.hit : e.sheet.attack[1]);
+      e.mat.emissive.setRGB(1, 0.5 + Math.random() * 0.5, 0.3);
+      return;
     }
-  }
-
-  kill(p) {
-    p.active = false;
-    p.mesh.visible = false;
-    this.sparks.burst(p.mesh.position, 10, 0x80ff40, { speed: 3, life: 0.35, gravity: 4 });
+    if (e.type === 'boss' && !e.bossFinal) {
+      e.bossFinal = true;
+      G.fx.explosions.spawn({ x: e.pos.x, y: e.pos.y + 2.5, z: e.pos.z }, 9, 0.9);
+      G.fx.gibs.burst({ x: e.pos.x, y: e.pos.y + 3, z: e.pos.z }, 40, 10, 0.6, e.pos.y);
+      G.fx.bloodBurst({ x: e.pos.x, y: e.pos.y + 3, z: e.pos.z }, 6);
+      G.player.addTrauma(1);
+      G.onBossDead(e);
+    }
+    if (e.gibbed) return;
+    const d = e.sheet.death, k = e.type === 'boss' ? Math.max(0, e.deathT - 2.4) : e.deathT;
+    const i = Math.min(3, Math.floor(k / 0.11));
+    this.setFrame(e, d[i]);
+    e.mat.emissive.setRGB(0.2, 0.17, 0.17);
+    e.group.rotation.y = Math.atan2(G.camera.position.x - e.pos.x, G.camera.position.z - e.pos.z);
+    if (i === 3 && !e.corpse) {
+      e.corpse = true;
+      this.corpses.push(e);
+      if (this.corpses.length > 40) { const old = this.corpses.shift(); old.group.visible = false; }
+    }
   }
 
   clear() {
-    for (const e of this.list) {
-      this.scene.remove(e.group);
-      for (const m of e.mats) m.dispose();
-      e.map.dispose();
-    }
+    for (const e of this.list) { this.G.scene.remove(e.group); e.mat.dispose(); e.map.dispose(); e.sprite.geometry.dispose(); }
     this.list = [];
-    for (const p of this.projectiles) { p.active = false; p.mesh.visible = false; }
+    this.corpses = [];
   }
-}
 
-function pushApart(a, b, min, k) {
-  const dx = b.x - a.x, dz = b.z - a.z;
-  const d = Math.hypot(dx, dz);
-  if (d >= min || d < 1e-4) return;
-  const push = ((min - d) / d) * k;
-  a.x -= dx * push; a.z -= dz * push;
-  b.x += dx * push; b.z += dz * push;
+  // Убираем из списка совсем старые трупы, которых уже не видно (держим список коротким)
+  prune() {
+    this.list = this.list.filter((e) => {
+      if (e.dead && (e.gibbed || !e.group.visible) && e.deathT > 3) { this.G.scene.remove(e.group); e.mat.dispose(); e.map.dispose(); e.sprite.geometry.dispose(); return false; }
+      return true;
+    });
+  }
 }

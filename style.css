@@ -1,158 +1,167 @@
-/* Ретро-стиль: пиксельный шрифт, жёсткие тени, без скруглений.
-   Палитра: багровый, латунь, холодная сталь. */
+/* Интерфейс в духе эталона: минималистичный, нижняя панель по центру, полоса задачи сверху,
+   тонкие золотые линии вместо тяжёлых рамок. Пиксельные элементы — без сглаживания. */
 :root {
   color-scheme: dark;
-  --ink: #0c0606;        /* почти чёрный для контуров и теней */
-  --bone: #f0e2c0;       /* основной текст */
-  --brass: #e0b040;      /* латунь, акценты */
-  --blood: #d02018;      /* здоровье, опасность */
-  --steel: #7a9ad0;      /* броня */
-  --panel: rgba(20, 8, 8, 0.82);
-  --pixel: "Press Start 2P", ui-monospace, "Courier New", monospace;
+  --ink: #0e0a0a;
+  --bone: #f2ecdf;
+  --gold: #c89a3c;
+  --gold-hi: #e8b840;
+  --blood: #ca2000;
+  --lime: #bbde03;
+  --steel: #9ab0d0;
+  --panel: rgba(30, 36, 44, 0.86);
+  --text: "Yanone Kaffeesatz", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --pixel: "Press Start 2P", ui-monospace, monospace;
+  --btn-scale: 1;
+  --btn-alpha: 0.55;
 }
 
 html, body {
-  margin: 0; padding: 0; width: 100%; height: 100%;
-  overflow: hidden; background: #120606; color: var(--bone);
-  font-family: var(--pixel);
+  margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+  background: #a9bcd6; color: var(--bone); font-family: var(--text);
   touch-action: none; user-select: none; -webkit-user-select: none;
-  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
-  overscroll-behavior: none;
+  -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
 }
 #game, #game canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
-/* растягиваем маленькую картинку без размытия — квадратные пиксели */
-#game canvas { image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; image-rendering: pixelated; }
+#overlay { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: pixelated; image-rendering: crisp-edges; }
 .hidden { display: none !important; }
+canvas.pix, #advisor, #portrait, #weaponIcon { image-rendering: pixelated; image-rendering: crisp-edges; }
 
-/* ---------- HUD ---------- */
-#hud { position: fixed; inset: 0; pointer-events: none; text-shadow: 2px 2px 0 var(--ink); }
+#hud { position: fixed; inset: 0; pointer-events: none; }
 
-/* прицел из четырёх "пикселей" */
-#crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-#crosshair i { position: absolute; width: 4px; height: 4px; background: var(--bone); box-shadow: 1px 1px 0 var(--ink); }
-#crosshair i:nth-child(1) { left: -2px; top: -10px; }
-#crosshair i:nth-child(2) { left: -2px; top: 6px; }
-#crosshair i:nth-child(3) { left: -10px; top: -2px; }
-#crosshair i:nth-child(4) { left: 6px; top: -2px; }
-
+/* прицел — четыре точки */
+#crosshair { position: absolute; left: 50%; top: 50%; }
+#crosshair i { position: absolute; width: 3px; height: 3px; background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.6); }
+#crosshair i:nth-child(1) { left: -1px; top: -9px; } #crosshair i:nth-child(2) { left: -1px; top: 6px; }
+#crosshair i:nth-child(3) { left: -9px; top: -1px; } #crosshair i:nth-child(4) { left: 6px; top: -1px; }
 #hitmarker {
-  --c: var(--bone);
-  position: absolute; left: 50%; top: 50%; width: 28px; height: 28px; margin: -14px 0 0 -14px;
-  opacity: 0; transform: rotate(45deg);
-  background:
-    linear-gradient(var(--c), var(--c)) center top / 4px 8px no-repeat,
-    linear-gradient(var(--c), var(--c)) center bottom / 4px 8px no-repeat,
-    linear-gradient(var(--c), var(--c)) left center / 8px 4px no-repeat,
-    linear-gradient(var(--c), var(--c)) right center / 8px 4px no-repeat;
+  --c: #fff; position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; margin: -12px 0 0 -12px; opacity: 0; transform: rotate(45deg);
+  background: linear-gradient(var(--c), var(--c)) center top / 3px 7px no-repeat, linear-gradient(var(--c), var(--c)) center bottom / 3px 7px no-repeat,
+              linear-gradient(var(--c), var(--c)) left center / 7px 3px no-repeat, linear-gradient(var(--c), var(--c)) right center / 7px 3px no-repeat;
 }
-#hitmarker.show { animation: hit 0.18s steps(3); }
-#hitmarker.kill { --c: var(--blood); }
-#hitmarker.kill.show { animation: hit 0.3s steps(4); }
-@keyframes hit { from { opacity: 1; transform: rotate(45deg) scale(1.4); } to { opacity: 0; transform: rotate(45deg) scale(1); } }
+#hitmarker.show { animation: hit 0.2s steps(3); }
+#hitmarker.kill { --c: #ff3020; }
+@keyframes hit { from { opacity: 1; transform: rotate(45deg) scale(1.3); } to { opacity: 0; transform: rotate(45deg) scale(1); } }
+#damage { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 45%, rgba(210, 0, 0, 0.75) 100%); }
 
-#damage {
-  position: absolute; inset: 0; opacity: 0;
-  background: radial-gradient(ellipse at center, transparent 40%, rgba(200, 0, 0, 0.9) 100%);
+/* ---------- полоса задачи (рваные края — фон рисуется в hud.js) ---------- */
+#objective {
+  position: absolute; top: max(10px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  width: min(50vw, 640px); min-height: clamp(44px, 14vh, 80px); display: flex; align-items: center; gap: 2vh;
+  padding: 1.4vh 3vh 1.4vh 1.6vh; box-sizing: border-box;
+  background-size: 100% 100%; image-rendering: pixelated;
+  transition: opacity 0.4s;
 }
-
-#wave {
+#objective.dim { opacity: 0; }
+.advisorFrame { flex: none; width: clamp(30px, 10vh, 56px); height: clamp(39px, 13vh, 73px); padding: 3px; margin: -6px 0; background: #1a1612; border: 2px solid #6a5226; box-shadow: inset 0 0 0 1px #2e2414, 0 2px 0 #000; }
+#advisor { width: 100%; height: 100%; display: block; }
+#objText { font-size: clamp(13px, 4.6vh, 27px); line-height: 1.12; letter-spacing: 0.3px; color: #f4f1e8; text-shadow: 0 2px 0 rgba(0,0,0,0.6); }
+#objShort {
   position: absolute; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
-  font-size: 14px; letter-spacing: 2px; text-align: center; color: var(--brass); white-space: nowrap;
+  font-size: clamp(14px, 2vw, 19px); color: #f4f1e8; text-shadow: 0 2px 0 #000, 0 0 6px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.4s; white-space: nowrap;
 }
-#enemiesLeft { display: block; margin-top: 8px; font-size: 10px; color: var(--bone); }
+#objShort.show { opacity: 1; }
 
 #banner {
-  position: absolute; top: 26%; left: 16px; right: 16px; text-align: center;
-  font-size: clamp(22px, 6vw, 48px); line-height: 1.3; color: var(--brass);
-  text-shadow: 4px 4px 0 #6a1010, 6px 6px 0 var(--ink);
-  opacity: 0;
+  position: absolute; top: 30%; left: 16px; right: 16px; text-align: center;
+  font-size: clamp(30px, 8vw, 74px); font-weight: 700; letter-spacing: 4px; color: #ffe6a8;
+  text-shadow: 0 3px 0 #6a1408, 0 6px 0 rgba(0,0,0,0.5); opacity: 0;
 }
-#banner.show { opacity: 1; animation: slam 0.25s steps(4); }
-@keyframes slam { from { transform: scale(1.8); } to { transform: scale(1); } }
+#banner.show { opacity: 1; animation: slam 0.3s steps(5); }
+@keyframes slam { from { transform: scale(1.7); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
+#pickupMsg { position: absolute; bottom: 21%; left: 50%; transform: translateX(-50%); font-size: clamp(15px, 2.2vw, 21px); color: var(--lime); text-shadow: 0 2px 0 #000; opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+#pickupMsg.show { opacity: 1; }
 
-#boss { position: absolute; top: calc(max(14px, env(safe-area-inset-top)) + 34px); left: 50%; transform: translateX(-50%); width: min(60vw, 440px); text-align: center; }
-#boss .label { font-size: 10px; color: #ff6a40; margin-bottom: 6px; }
-#boss .bar { height: 12px; }
-#bossFill { background: repeating-linear-gradient(90deg, #e02818 0 10px, #901008 10px 12px); }
+/* ---------- маркер цели и стрелка ---------- */
+#marker { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); text-align: center; filter: drop-shadow(0 2px 0 rgba(0,0,0,0.5)); }
+#marker svg { display: block; margin: 0 auto; animation: pulse 1.2s ease-in-out infinite; }
+#markerDist { font-family: var(--pixel); font-size: 8px; color: #fff3cc; text-shadow: 1px 1px 0 #000; }
+@keyframes pulse { 50% { transform: scale(1.15); } }
+#edgeArrow { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); filter: drop-shadow(0 2px 0 rgba(0,0,0,0.4)); }
 
-/* Панель статуса внизу слева (десктоп) */
-#stats {
-  position: absolute; left: max(16px, env(safe-area-inset-left)); bottom: max(16px, env(safe-area-inset-bottom));
-  width: 300px; padding: 10px 12px; background: var(--panel);
-  border: 3px solid #5a3a1a; box-shadow: inset 0 0 0 2px #2a1408, 4px 4px 0 var(--ink);
+/* ---------- полоса босса ---------- */
+#bossbar { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 84px); left: 50%; transform: translateX(-50%); width: min(46vw, 520px); text-align: center; }
+#bossbar .name { font-size: 18px; letter-spacing: 3px; color: #ffd6a0; text-shadow: 0 2px 0 #000; }
+#bossbar .bar { height: 10px; background: rgba(20,10,10,0.7); border: 1px solid var(--gold); }
+#bossFill { height: 100%; background: linear-gradient(#ff4020, #9a1408); transform-origin: left; }
+
+/* ---------- нижняя панель ---------- */
+#bottom {
+  position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  display: flex; align-items: flex-end; gap: 0; padding-bottom: env(safe-area-inset-bottom);
 }
-.row { display: flex; align-items: center; gap: 8px; }
-.row + .row { margin-top: 8px; }
-.icon { width: 14px; height: 14px; flex: none; box-shadow: 2px 2px 0 var(--ink); }
-.icon.health { background: var(--blood); clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%); }
-.icon.armor { background: var(--steel); clip-path: polygon(0 0, 100% 0, 100% 55%, 50% 100%, 0 55%); }
-.lbl { width: 80px; font-size: 8px; }
-.num { width: 46px; font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
-.bar { flex: 1; height: 12px; background: #1a0a08; border: 2px solid var(--ink); }
-.fill { height: 100%; width: 100%; transform-origin: left; }
-.fill.health { background: repeating-linear-gradient(90deg, var(--blood) 0 8px, #7a1008 8px 10px); }
-.fill.armor { background: repeating-linear-gradient(90deg, var(--steel) 0 8px, #3a4a6a 8px 10px); }
-
-/* Патроны внизу справа */
-#ammo {
-  position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom));
-  padding: 10px 14px; background: var(--panel); text-align: right;
-  border: 3px solid #5a3a1a; box-shadow: inset 0 0 0 2px #2a1408, 4px 4px 0 var(--ink);
-  font-size: 32px; color: var(--brass);
+#weaponBox { display: flex; flex-direction: column; align-items: flex-end; margin: 0 10px 10px 0; text-shadow: 1px 1px 0 #000; }
+#weaponIcon { width: clamp(48px, 11vh, 84px); height: clamp(20px, 4.6vh, 35px); }
+#ammoText { font-family: var(--pixel); font-size: clamp(8px, 2.3vh, 13px); color: #fff3cc; margin-top: 2px; }
+#ammoText.low { color: #ff5030; }
+#grenText { font-family: var(--pixel); font-size: clamp(6px, 1.7vh, 9px); color: #c8d0dc; margin-top: 4px; }
+#portraitBox { width: clamp(52px, 15vh, 150px); height: clamp(52px, 15vh, 150px); position: relative; }
+#portrait { width: 100%; height: 100%; display: block; }
+#numbers {
+  width: clamp(40px, 11vh, 70px); margin: 0 0 1.6vh -2px; padding: 0.9vh 0 1.1vh; text-align: center; font-family: var(--pixel);
+  background: rgba(28, 34, 26, 0.88); border: 1px solid #7a6a40; box-shadow: inset 0 0 0 1px #1a1a12;
 }
-#ammo .max { font-size: 14px; color: var(--bone); }
-#ammo.low #ammoNum { color: var(--blood); animation: blink 0.5s steps(2) infinite; }
-@keyframes blink { 50% { opacity: 0.4; } }
-#reloadHint { font-size: 8px; color: #ff8a50; min-height: 10px; margin-top: 6px; }
+#armorNum { font-size: clamp(7px, 2.2vh, 13px); color: var(--steel); }
+#healthNum { font-size: clamp(9px, 2.9vh, 17px); color: #f2f4e8; margin-top: 0.9vh; }
+#blade { width: clamp(100px, 33vh, 240px); height: clamp(26px, 8.6vh, 62px); margin: 0 0 1.8vh 2px; }
+#dashPip { position: absolute; left: 50%; bottom: 2px; width: 52px; height: 3px; transform: translateX(-50%); background: var(--lime); opacity: 0.8; transform-origin: left; }
 
-/* На телефоне панели уходят наверх — внизу пальцы и кнопки */
-body.touch #stats { bottom: auto; top: max(10px, env(safe-area-inset-top)); width: 220px; padding: 6px 8px; }
-body.touch #ammo { bottom: auto; top: max(10px, env(safe-area-inset-top)); font-size: 22px; padding: 6px 10px; }
-body.touch .lbl { display: none; }
-body.touch #wave { top: auto; bottom: 14px; font-size: 10px; }
-body.touch #boss { top: calc(max(10px, env(safe-area-inset-top)) + 64px); }
+#menuBtn {
+  position: absolute; top: max(14px, env(safe-area-inset-top)); right: max(18px, env(safe-area-inset-right));
+  width: 40px; height: 34px; padding: 4px; border: 0; background: transparent; pointer-events: auto; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+#menuBtn i { display: block; height: 6px; background: var(--lime); box-shadow: 0 0 8px rgba(187, 222, 3, 0.7); }
 
-/* ---------- Сенсорное управление ---------- */
+/* ---------- сенсорные кнопки: маленькие, контурные, полупрозрачные, по краям ---------- */
 #touch { position: fixed; inset: 0; }
 #stickBase {
-  position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
-  border: 3px solid rgba(240, 200, 120, 0.4); background: rgba(0, 0, 0, 0.3);
-  left: 110px; bottom: 60px; top: auto; opacity: 0.5; pointer-events: none;
+  position: absolute; width: 104px; height: 104px; margin: -52px 0 0 -52px; border-radius: 50%;
+  left: 120px; top: calc(100% - 110px); border: 2px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.06);
+  opacity: 0.6; pointer-events: none;
 }
 #stickBase.active { opacity: 1; }
-#stickKnob {
-  position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
-  border-radius: 50%; background: rgba(224, 176, 64, 0.6);
-}
+#stickKnob { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px; border-radius: 50%; background: rgba(255,255,255,0.35); border: 2px solid rgba(255,255,255,0.6); }
 .tbtn {
-  position: absolute; display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; border: 3px solid rgba(224, 176, 64, 0.7); background: rgba(80, 16, 10, 0.55);
-  color: var(--bone); font-size: 9px; text-shadow: 2px 2px 0 var(--ink);
+  position: absolute; width: calc(46px * var(--btn-scale)); height: calc(46px * var(--btn-scale)); border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85); color: #fff; background: rgba(20, 24, 32, 0.18);
+  opacity: var(--btn-alpha); display: flex; align-items: center; justify-content: center; box-sizing: border-box;
 }
-.tbtn.active { background: rgba(220, 70, 30, 0.75); }
-#btnFire { width: 96px; height: 96px; right: max(28px, env(safe-area-inset-right)); bottom: 40px; font-size: 10px; }
-#btnMelee { width: 66px; height: 66px; right: calc(max(28px, env(safe-area-inset-right)) + 112px); bottom: 34px; }
-#btnReload { width: 50px; height: 50px; right: calc(max(28px, env(safe-area-inset-right)) + 30px); bottom: 150px; font-size: 12px; }
+.tbtn svg { width: 56%; height: 56%; pointer-events: none; }
+.tbtn.big { width: calc(66px * var(--btn-scale)); height: calc(66px * var(--btn-scale)); }
+.tbtn.active { background: rgba(232, 184, 64, 0.45); border-color: var(--gold-hi); opacity: 1; }
+#btnFire { right: calc(max(16px, env(safe-area-inset-right)) + 0px); bottom: calc(22px * var(--btn-scale)); }
+#btnMelee { right: calc(max(16px, env(safe-area-inset-right)) + 80px * var(--btn-scale)); bottom: calc(14px * var(--btn-scale)); }
+#btnJump { right: calc(max(16px, env(safe-area-inset-right)) + 10px * var(--btn-scale)); bottom: calc(100px * var(--btn-scale)); }
+#btnDash { right: calc(max(16px, env(safe-area-inset-right)) + 66px * var(--btn-scale)); bottom: calc(74px * var(--btn-scale)); }
+#btnGrenade { right: calc(max(16px, env(safe-area-inset-right)) + 10px * var(--btn-scale)); bottom: calc(158px * var(--btn-scale)); }
+#btnReload { right: calc(max(16px, env(safe-area-inset-right)) + 64px * var(--btn-scale)); bottom: calc(132px * var(--btn-scale)); }
 
-/* ---------- Экраны ---------- */
+body.touch #crosshair i { width: 3px; height: 3px; }
+
+/* ---------- экраны ---------- */
 .overlay {
-  position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 14px; padding: 16px; box-sizing: border-box; text-align: center;
-  background:
-    repeating-linear-gradient(0deg, rgba(0,0,0,0.25) 0 2px, transparent 2px 4px), /* "строки развёртки" */
-    radial-gradient(ellipse at center, rgba(70, 14, 10, 0.85), rgba(8, 2, 2, 0.96));
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+  background: radial-gradient(ellipse at center, rgba(40, 52, 70, 0.55), rgba(10, 14, 22, 0.9));
+  overflow-y: auto;
 }
-.overlay h1 {
-  margin: 0; font-size: clamp(22px, 6vw, 56px); line-height: 1.25; letter-spacing: 2px; font-weight: normal;
-  color: var(--brass); text-shadow: 4px 4px 0 #8a1410, 8px 8px 0 var(--ink); text-wrap: balance;
+.panel { max-width: 640px; width: 100%; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.panel h1 { margin: 0; font-size: clamp(40px, 10vw, 92px); font-weight: 700; letter-spacing: 6px; line-height: 0.95; color: #f6ead0; text-shadow: 0 4px 0 #7a1810, 0 8px 0 rgba(0,0,0,0.45); text-wrap: balance; }
+#screenSub { margin: 0; font-size: 20px; letter-spacing: 8px; color: var(--gold-hi); text-transform: uppercase; }
+#screenText { font-size: clamp(17px, 2.6vw, 22px); line-height: 1.3; color: #e8eef6; max-width: 560px; }
+#screenText .stats { display: grid; grid-template-columns: auto auto; gap: 4px 18px; margin: 10px auto 0; width: max-content; font-size: 22px; text-align: left; }
+#screenText .stats b { color: var(--gold-hi); font-weight: 700; text-align: right; }
+.buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.panel button {
+  font-family: var(--text); font-size: 28px; font-weight: 700; letter-spacing: 3px; padding: 10px 36px; cursor: pointer;
+  color: #1e1406; background: linear-gradient(#f0c860, #b88a28); border: 2px solid #f8e0a0; box-shadow: 0 4px 0 #5a3c10, 0 0 0 2px #2a1c08;
 }
-.overlay p { max-width: 640px; margin: 0; font-size: 11px; line-height: 1.8; color: var(--bone); }
-#controlsHelp { font-size: 9px; color: #b89a80; }
-.overlay button {
-  padding: 16px 32px; font-family: var(--pixel); font-size: 16px; cursor: pointer;
-  color: var(--bone); background: #8a1a10; border: 0;
-  box-shadow: inset -4px -4px 0 #4a0806, inset 4px 4px 0 #c84030, 4px 4px 0 var(--ink);
-  text-shadow: 2px 2px 0 var(--ink);
-}
-.overlay button:hover, .overlay button:focus-visible { background: #a82214; outline: 3px solid var(--brass); outline-offset: 3px; }
-.overlay button:active { transform: translate(2px, 2px); box-shadow: inset -4px -4px 0 #4a0806, inset 4px 4px 0 #c84030, 2px 2px 0 var(--ink); }
+.panel button.ghost { color: #f2ecdf; background: rgba(20, 24, 32, 0.6); border-color: var(--gold); box-shadow: 0 4px 0 #000; }
+.panel button:active { transform: translateY(2px); box-shadow: 0 2px 0 #5a3c10; }
+.panel button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+#settings { width: min(100%, 440px); text-align: left; background: rgba(20, 24, 32, 0.7); border: 1px solid var(--gold); padding: 6px 14px; font-size: 18px; }
+#settings summary { cursor: pointer; color: var(--gold-hi); font-size: 20px; }
+#settings label { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 8px 0; color: #e8eef6; }
+#settings label.check { justify-content: flex-start; }
+#settings input[type=range] { width: 46%; accent-color: var(--gold-hi); }
+#controlsHelp { font-size: 15px; line-height: 1.4; color: #b8c4d6; max-width: 600px; }
