@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { weaponSprites } from './art_weapons.js';
 import { sfx } from './audio.js';
+import { miscArt } from './art_misc.js';
 
 export const WEAPONS = {
   rifle: { slot: 1, name: 'Громовержец', delay: 0.11, dmg: 18, pellets: 1, spread: 0.014, mag: 30, reserve: 150, reserveMax: 300, reload: 1.35, kick: 0.026, shake: 0.1, splash: 1.3, splashDmg: 10, flash: 0.8 },
@@ -256,7 +257,14 @@ export class Weapons {
   // Брызги крови на экране
   splatterScreen(n) {
     for (let i = 0; i < n; i++) {
-      this.screenBlood.push({ x: 0.2 + Math.random() * 0.6, y: 0.2 + Math.random() * 0.6, r: 2 + Math.random() * (i < 3 ? 22 : 9), life: 0.9 + Math.random() * 0.8, seed: Math.random() * 100 });
+      const big = i < 3;
+      this.screenBlood.push({
+        x: 0.15 + Math.random() * 0.7, y: 0.15 + Math.random() * 0.65,
+        s: big ? 1.4 + Math.random() * 1.6 : 0.35 + Math.random() * 0.6,   // масштаб кляксы
+        rot: Math.floor(Math.random() * 4), img: (Math.random() * 4) | 0,
+        a: big ? 0.55 : 0.9,                                            // крупные — полупрозрачные
+        life: 1 + Math.random() * 0.9, drip: 0,
+      });
     }
   }
 
@@ -332,23 +340,20 @@ export class Weapons {
       g.restore();
     }
 
-    // кровь на экране: пиксельные кляксы, медленно стекают и тают
+    // кровь на экране: рваные пиксельные кляксы (спрайты брызг), стекают и тают
+    const splats = miscArt().splats;
     for (let i = this.screenBlood.length - 1; i >= 0; i--) {
       const b = this.screenBlood[i];
       b.life -= dt;
-      b.y += dt * 0.01;
+      b.drip += dt * 6;
       if (b.life <= 0) { this.screenBlood.splice(i, 1); continue; }
-      g.globalAlpha = Math.min(1, b.life * 1.5) * 0.9;
-      g.fillStyle = b.r > 12 ? '#c8141c' : '#e02028';
-      const cx = b.x * OW, cy = b.y * OH;
-      for (let j = 0; j < 7; j++) {
-        const a = j * 0.9 + b.seed, rr = b.r * (j ? 0.45 : 1);
-        const ox = j ? Math.cos(a) * b.r * 0.8 : 0, oy = j ? Math.sin(a) * b.r * 0.8 : 0;
-        g.beginPath();
-        g.arc(Math.round(cx + ox), Math.round(cy + oy), Math.max(1, rr), 0, Math.PI * 2);
-        g.fill();
-      }
-      g.fillRect(Math.round(cx - 1), Math.round(cy), 2, Math.round(b.r * (1.6 - b.life * 0.4)));
+      const size = 64 * b.s, cx = Math.round(b.x * OW), cy = Math.round(b.y * OH + b.drip);
+      g.globalAlpha = Math.min(1, b.life * 1.4) * b.a;
+      g.save();
+      g.translate(cx, cy);
+      g.rotate(b.rot * Math.PI / 2);
+      g.drawImage(splats[b.img], -size / 2, -size / 2, size, size);
+      g.restore();
       g.globalAlpha = 1;
     }
   }

@@ -36,13 +36,13 @@ function fbm(n, x, y, oct = 3) {
 // ---------- Снег (256) ----------
 function snow() {
   const T = canvasRGBA(256, 256), R = rng(1), n = noise2(3);
-  const base = hex('#dfe5ef'), shadow = hex('#b9c4d6'), bright = hex('#f4f7fb');
+  const base = hex('#ccd5e3'), shadow = hex('#9fafc6'), bright = hex('#eef3fa');
   for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
     const v = fbm(n, x / 32, y / 32);
     const ripple = Math.sin((x * 0.06 + y * 0.11) + fbm(n, x / 64 + 9, y / 64) * 6) * 0.5 + 0.5; // рябь от ветра
     let c = mix(shadow, base, clamp(v * 1.3 - 0.1 + ripple * 0.25, 0, 1));
     if (ripple > 0.9) c = mix(c, bright, 0.6);
-    const q = Math.round((c[0] - 200) / 7) * 7 + 200; // мягкая постеризация — пиксельные пятна
+    const q = Math.round((c[0] - 180) / 8) * 8 + 180; // мягкая постеризация — пиксельные пятна
     T.set(x, y, clamp(q), clamp(c[1] + (q - c[0])), clamp(c[2] + (q - c[0])));
   }
   for (let i = 0; i < 600; i++) T.set(R() * 256 | 0, R() * 256 | 0, 255, 255, 255); // искры
@@ -171,6 +171,20 @@ function sandbags() {
   return T.done();
 }
 
+// ---------- Один мешок (64×32): светлый хаки, строчка, складки, снег сверху ----------
+function bag() {
+  const T = canvasRGBA(64, 32), R = rng(15), n = noise2(31);
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 64; x++) {
+    const v = 0.62 + (fbm(n, x / 6, y / 6) - 0.5) * 0.3 - (y / 32) * 0.18;
+    const c = mix(hex('#6e5434'), hex('#d6b682'), clamp(v, 0, 1));
+    T.set(x, y, c[0], c[1], c[2]);
+  }
+  for (let x = 0; x < 64; x += 2) { T.shade(x, 6, 0.72); T.shade(x + 1, 26, 0.75); }        // строчки
+  for (let i = 0; i < 5; i++) { const fx = 6 + R() * 52 | 0; for (let y = 9; y < 23; y++) T.shade(fx + (y % 4 === 0 ? 1 : 0), y, 0.84); } // складки
+  for (let x = 0; x < 64; x++) if (R() < 0.55) { T.set(x, 0, 236, 240, 248); if (R() < 0.5) T.set(x, 1, 222, 228, 238); } // снег
+  return T.done();
+}
+
 // ---------- Ящик (128): оливковые доски, металлические уголки, трафарет ----------
 function crate() {
   const T = canvasRGBA(128, 128), R = rng(6), n = noise2(13);
@@ -288,7 +302,7 @@ export function envTextures() {
   const tex = (c) => nearestTexture(c, true);
   cache = {
     snow: tex(snow()), rock: tex(rock()), blocks: tex(blocks()), metal: tex(metal()),
-    sandbags: tex(sandbags()), crate: tex(crate()), barrel: tex(barrel()), gate: tex(gate()),
+    sandbags: tex(sandbags()), bag: tex(bag()), crate: tex(crate()), barrel: tex(barrel()), gate: tex(gate()),
     tiles: tex(tiles()), hull: tex(hull()), bannerFriend: tex(banner(true)), bannerEnemy: tex(banner(false)),
   };
   return cache;
@@ -296,5 +310,5 @@ export function envTextures() {
 
 // Для tools/preview.html?set=tex — сами холсты
 export function textureCanvases() {
-  return { snow: snow(), rock: rock(), blocks: blocks(), metal: metal(), sandbags: sandbags(), crate: crate(), barrel: barrel(), gate: gate(), tiles: tiles(), hull: hull(), bannerFriend: banner(true), bannerEnemy: banner(false) };
+  return { snow: snow(), rock: rock(), blocks: blocks(), metal: metal(), sandbags: sandbags(), bag: bag(), crate: crate(), barrel: barrel(), gate: gate(), tiles: tiles(), hull: hull(), bannerFriend: banner(true), bannerEnemy: banner(false) };
 }

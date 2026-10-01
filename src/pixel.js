@@ -125,6 +125,7 @@ export class Mask {
 
 // ---------- Холст спрайта ----------
 export class Pix {
+  static dither = 0.6; // сила дизеринга по умолчанию (оружие рисуем с меньшей)
   constructor(w, h) {
     this.w = w;
     this.h = h;
@@ -166,7 +167,7 @@ export class Pix {
   // Залить маску материалом с объёмным затенением.
   // round — "толщина" скругления в пикселях (больше — мягче объём), grad — верх светлее низа,
   // tex(x,y) — добавка к тону (царапины, складки), contour — тёмная кромка там, где деталь лежит поверх другой.
-  fill(mask, rmp, { round = 3, grad = 0.25, bias = 0, dither = 0.6, contour = true, tilt = 1.8, tex = null, flat = false } = {}) {
+  fill(mask, rmp, { round = 3, grad = 0.25, bias = 0, dither = Pix.dither, contour = true, tilt = 1.8, tex = null, flat = false } = {}) {
     const { w, h } = this, M = mask.m, n = rmp.length;
     // 1) расстояние до края маски (два прохода "шахматным" способом)
     const D = new Float32Array(w * h);

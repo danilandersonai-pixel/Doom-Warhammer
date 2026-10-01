@@ -86,8 +86,8 @@ export function buildLevel(scene, world) {
   disc.lookAt(0, 0, 0);
   scene.add(disc);
 
-  scene.add(new THREE.HemisphereLight(0xe6eef9, 0x8890a2, 1.55));
-  const sun = new THREE.DirectionalLight(0xfff4e2, 1.35);
+  scene.add(new THREE.HemisphereLight(0xe6eef9, 0x8890a2, 1.05));
+  const sun = new THREE.DirectionalLight(0xfff4e2, 0.95);
   sun.position.set(30, 50, -40);
   scene.add(sun);
 
@@ -162,8 +162,8 @@ export function buildLevel(scene, world) {
     for (const [a, b, y0, y1] of pieces) {
       if (b - a < 0.05 || y1 - y0 < 0.05) continue;
       const c = (a + b) / 2, len = b - a;
-      if (axis === 'x') block(c, fixed, len, 1.2, y0, y1 - y0, M.blocks, { texScale: 4 });
-      else block(fixed, c, 1.2, len, y0, y1 - y0, M.blocks, { texScale: 4 });
+      if (axis === 'x') block(c, fixed, len, 1.2, y0, y1 - y0, M.blocks, { texScale: 3 });
+      else block(fixed, c, 1.2, len, y0, y1 - y0, M.blocks, { texScale: 3 });
     }
   }
   wall('x', H + 0.6, -H - 1.2, H + 1.2, [{ a: -2.5, b: 2.5, y0: 0, y1: 5 }]);          // юг: входные ворота
@@ -271,7 +271,7 @@ export function buildLevel(scene, world) {
   const bagGeo = new THREE.SphereGeometry(1, 10, 6);
   bagGeo.scale(0.42, 0.17, 0.27);
   const bagUv = bagGeo.attributes.uv;
-  for (let i = 0; i < bagUv.count; i++) bagUv.setXY(i, bagUv.getX(i) * 0.5, bagUv.getY(i) * 0.3);
+  for (let i = 0; i < bagUv.count; i++) bagUv.setXY(i, bagUv.getX(i) * 2, bagUv.getY(i));
   const bagList = [];
   function sandbagArc(cx, cz, rad, a0, a1, layers = 3) {
     const len = rad * (a1 - a0), n = Math.max(2, Math.round(len / 0.78));
@@ -292,7 +292,7 @@ export function buildLevel(scene, world) {
   sandbagArc(-12, -6, 2.8, -1.2, 0.6);
   sandbagArc(14, 13, 2.4, 3.2, 4.6);
   sandbagArc(0, 26, 3, 3.6, 5.8, 2);
-  const bags = new THREE.InstancedMesh(bagGeo, M.sand, bagList.length);
+  const bags = new THREE.InstancedMesh(bagGeo, new THREE.MeshLambertMaterial({ map: T.bag }), bagList.length);
   const dummy = new THREE.Object3D();
   bagList.forEach(([x, y, z, ry], i) => { dummy.position.set(x, y, z); dummy.rotation.set(0, ry, (R() - 0.5) * 0.1); dummy.updateMatrix(); bags.setMatrixAt(i, dummy.matrix); });
   scene.add(bags);
@@ -423,6 +423,14 @@ export function buildLevel(scene, world) {
     scene.add(halo);
     fires.push({ map, halo, phase: R() * 10, count: fireTex.count });
   }
+  const brazier = (x, y, z) => {
+    block(x, z, 0.35, 0.35, y, 1.1, M.metal, { top: M.metal, texScale: 1 });
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.3, 0.4, 8), M.metal);
+    bowl.position.set(x, y + 1.3, z);
+    scene.add(bowl);
+    fire(x, y + 1.45, z, 1.1);
+  };
+  for (const [x, y, z] of [[-4, 0, 19.2], [4, 0, 19.2], [-4.5, PH, -11.9], [4.5, PH, -11.9], [-19, 0, -19], [19, 0, -19], [-3.6, PH, -19.2], [3.6, PH, -19.2]]) brazier(x, y, z);
   fire(-15.4, 2.6, -10.5, 1.3); fire(-14, 1.8, -8.8, 0.9); fire(10.6, 0, 3.4, 0.8); fire(-2.6, 0, 24.6, 0.9); fire(2.6, 0, -5, 0.7); fire(-12.6, 0, 12.4, 0.7);
 
   // ---------------- Точки появления врагов ----------------

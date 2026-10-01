@@ -46,7 +46,7 @@ export class Pickups {
     // светящееся кольцо: лаймовое у оружия и важных вещей, золотое у остальных
     const ringMat = new THREE.MeshBasicMaterial({ map: this.ringTex[isWeapon || type === 'relic' ? 'lime' : 'gold'], transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: isWeapon || type === 'relic' ? 0.9 : 0.55 });
     const ring = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), ringMat);
-    ring.scale.setScalar(isWeapon || type === 'relic' ? 2.2 : 1.3);
+    ring.scale.setScalar(isWeapon || type === 'relic' ? 2.6 : 1.6);
     ring.position.y = 0.03;
     group.add(ring);
     if (isWeapon || type === 'relic') {
@@ -146,7 +146,7 @@ export class Pickups {
     for (const p of this.list) {
       if (p.taken) continue;
       p.spr.position.y = 0.55 + Math.sin(time * 2.5 + p.phase) * 0.12;
-      p.ring.material.opacity = (p.type.startsWith('weapon:') || p.type === 'relic' ? 0.75 : 0.45) + Math.sin(time * 4 + p.phase) * 0.15;
+      p.ring.material.opacity = (p.type.startsWith('weapon:') || p.type === 'relic' ? 0.95 : 0.7) + Math.sin(time * 4 + p.phase) * 0.15;
       if (p.group.userData.halo) p.group.userData.halo.position.y = p.spr.position.y;
       if (p.drop) { p.life -= dt; if (p.life <= 0) { p.taken = true; this.G.scene.remove(p.group); continue; } }
       const dx = P.pos.x - p.x, dz = P.pos.z - p.z, dy = P.pos.y - p.y;

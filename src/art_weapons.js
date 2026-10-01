@@ -232,6 +232,8 @@ export function flashSprite(r = 40, color = [255, 200, 90], seed = 1) {
 let cache = null;
 export function weaponSprites() {
   if (cache) return cache;
+  const prevDither = Pix.dither;
+  Pix.dither = 0.22; // на оружии тона ровнее, как в эталоне
   const rifleIdle = drawRifle();
   const shotIdle = drawShotgun();
   cache = {
@@ -260,6 +262,7 @@ export function weaponSprites() {
   cache.throwHand = cache.throwHand.toCanvas();
   cache.flash = cache.flash.map((f) => f.toCanvas());
   cache.flashBlue = cache.flashBlue.toCanvas();
+  Pix.dither = prevDither;
   return cache;
 }
 
