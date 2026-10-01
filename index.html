@@ -37,20 +37,29 @@
     <div id="marker"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 1 L23 12 L12 23 L1 12 Z" fill="#2a2016" stroke="#e8b840" stroke-width="2.5"/><path d="M12 7 L17 12 L12 17 L7 12 Z" fill="#e8b840"/></svg><span id="markerDist"></span></div>
     <div id="edgeArrow"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M16 3 L6 12 L16 21" fill="none" stroke="#2a1c0a" stroke-width="7" stroke-linejoin="miter"/><path d="M16 3 L6 12 L16 21" fill="none" stroke="#e8b840" stroke-width="4" stroke-linejoin="miter"/></svg></div>
 
-    <div id="bossbar" class="hidden"><div class="name">КОЛОСС</div><div class="bar"><div id="bossFill"></div></div></div>
+    <!-- Элитный враг: полоса здоровья и имя сверху -->
+    <div id="bossbar" class="hidden"><div class="bar"><div id="bossFill"></div><div id="bossLost"></div></div><div class="name" id="eliteName">КОЛОСС</div></div>
 
-    <!-- Нижняя панель: оружие, портрет героя, броня/здоровье, полоса-клинок -->
+    <!-- Патроны: лаймовая иконка оружия в скобках -->
+    <div id="ammoBox"><div class="bracket"><canvas id="weaponIcon" width="48" height="20"></canvas></div><div class="cnt"><div id="ammoText">30</div><div id="ammoRes">150</div></div></div>
+    <!-- Гранаты -->
+    <div id="grenBox"><span id="grenText">3</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="rgba(20,30,10,0.35)" stroke="#bbde03" stroke-width="1.5" stroke-opacity="0.6"/><circle cx="12" cy="13.5" r="5.5" fill="#bbde03"/><path d="M9.5 13.5h5M12 8.5v10M10 6.5h4v2h-4z" stroke="#2a3a06" stroke-width="1.2"/></svg></div>
+
+    <!-- Нижняя панель: портрет, броня/здоровье числами и двумя полосами -->
     <div id="bottom">
-      <div id="weaponBox"><canvas id="weaponIcon" width="48" height="20"></canvas><div id="ammoText"></div><div id="grenText"></div></div>
       <div id="portraitBox"><canvas id="portrait" width="40" height="40"></canvas></div>
       <div id="numbers"><div id="armorNum">0</div><div id="healthNum">100</div></div>
-      <svg id="blade" viewBox="0 0 130 34">
-        <defs><clipPath id="hpClip"><rect id="hpRect" x="0" y="0" width="130" height="34"/></clipPath></defs>
-        <polygon points="2,9 100,6 127,17 100,28 2,25" fill="#1a1010" fill-opacity="0.75"/>
-        <polygon points="4,11 99,8.5 122,17 99,25.5 4,23" fill="#ca2000" clip-path="url(#hpClip)"/>
-        <polygon points="4,11 99,8.5 122,17 99,12 4,14" fill="#ff5a3a" fill-opacity="0.55" clip-path="url(#hpClip)"/>
-        <polygon points="2,9 100,6 127,17 100,28 2,25" fill="none" stroke="#c89a3c" stroke-width="2"/>
-        <path d="M100 6 L100 28" stroke="#c89a3c" stroke-width="1.5"/>
+      <svg id="blade" viewBox="0 0 150 40">
+        <defs>
+          <clipPath id="hpClip"><rect id="hpRect" x="0" y="0" width="150" height="40"/></clipPath>
+          <clipPath id="arClip"><rect id="arRect" x="0" y="0" width="150" height="40"/></clipPath>
+        </defs>
+        <polygon points="1,8 118,8 148,20 118,32 1,32" fill="#14100e" fill-opacity="0.85" stroke="#3a3430" stroke-width="2"/>
+        <rect x="5" y="11" width="112" height="7" fill="#1830c8" clip-path="url(#arClip)"/>
+        <rect x="5" y="11" width="112" height="2" fill="#6a84ff" clip-path="url(#arClip)"/>
+        <polygon points="5,22 117,22 135,26 117,29 5,29" fill="#d01a10" clip-path="url(#hpClip)"/>
+        <rect x="5" y="22" width="112" height="2" fill="#ff6a50" clip-path="url(#hpClip)"/>
+        <path d="M118 8 L148 20 L118 32" fill="none" stroke="#7a6a50" stroke-width="2"/>
       </svg>
       <div id="dashPip"></div>
     </div>
@@ -60,12 +69,12 @@
   <!-- Сенсорное управление: маленькие контурные кнопки по краям -->
   <div id="touch" class="hidden">
     <div id="stickBase"><div id="stickKnob"></div></div>
-    <div class="tbtn big" data-act="fire" id="btnFire"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6" stroke="currentColor" stroke-width="2"/></svg></div>
-    <div class="tbtn" data-act="jump" id="btnJump"><svg viewBox="0 0 24 24"><path d="M5 14 L12 6 L19 14 M5 20 L12 12 L19 20" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></div>
-    <div class="tbtn" data-act="dash" id="btnDash"><svg viewBox="0 0 24 24"><path d="M4 6 L11 12 L4 18 M12 6 L19 12 L12 18" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></div>
-    <div class="tbtn" data-act="melee" id="btnMelee"><svg viewBox="0 0 24 24"><path d="M4 20 L16 8 M14 4 L20 10 M6 14 L10 18" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15 5l1-1M17 7l1-1M19 9l1-1" stroke="currentColor" stroke-width="2"/></svg></div>
-    <div class="tbtn" data-act="grenade" id="btnGrenade"><svg viewBox="0 0 24 24"><circle cx="12" cy="14" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 7h4V4h-4z M15 5 L19 3" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
-    <div class="tbtn" data-act="reload" id="btnReload"><svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2-5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M18 3v5h-5" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></div>
+    <div class="tbtn big" data-act="fire" id="btnFire"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="2.4"/></svg></div>
+    <div class="tbtn pict" data-act="jump" id="btnJump"><svg viewBox="0 0 24 24"><circle cx="13" cy="4" r="2.4" fill="currentColor"/><path d="M12 7l-4 4 3 2-2 6M12 7l3 4 4-1M11 13l5 1 1 5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"/><path d="M4 22h6" stroke="currentColor" stroke-width="1.6" opacity="0.6"/></svg></div>
+    <div class="tbtn pict" data-act="dash" id="btnDash"><svg viewBox="0 0 24 24"><circle cx="15" cy="5" r="2.4" fill="currentColor"/><path d="M14 8l-3 5 4 2-1 6M14 8l5 3M11 13l-5 2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"/><path d="M1 9h6M2 13h4M1 17h5" stroke="currentColor" stroke-width="1.6"/><path d="M19 4c3 3 3 9 0 13" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
+    <div class="tbtn pict" data-act="melee" id="btnMelee"><svg viewBox="0 0 24 24"><path d="M3 21l3-3M5 16l3 3M7 17L19 5l2-2-1 3L8 18" fill="currentColor" stroke="currentColor" stroke-width="1.6"/><path d="M9 13l1 1M11 11l1 1M13 9l1 1M15 7l1 1" stroke="#22300a" stroke-width="1.2"/></svg></div>
+    <div class="tbtn ghost" data-act="grenade" id="btnGrenade"></div>
+    <div class="tbtn ghost" data-act="reload" id="btnReload"></div>
   </div>
 
   <!-- Экраны: меню, пауза с настройками, смерть, завершение -->

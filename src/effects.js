@@ -311,7 +311,7 @@ export class Explosions {
 
 // ---------- Снегопад: пиксельные хлопья вокруг камеры ----------
 export class Snowfall {
-  constructor(scene, count = 900) {
+  constructor(scene, count = 350) {
     this.count = count;
     this.pos = new Float32Array(count * 3);
     this.drift = new Float32Array(count);
@@ -323,7 +323,7 @@ export class Snowfall {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
-    this.points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 2.5, sizeAttenuation: false, transparent: true, opacity: 0.85, depthWrite: false }));
+    this.points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xb8b2aa, size: 2, sizeAttenuation: false, transparent: true, opacity: 0.45, depthWrite: false }));
     this.points.frustumCulled = false;
     scene.add(this.points);
   }
@@ -331,7 +331,7 @@ export class Snowfall {
   update(dt, cam, time) {
     for (let i = 0; i < this.count; i++) {
       const k = i * 3;
-      this.pos[k + 1] -= dt * (1.2 + (i % 5) * 0.25);
+      this.pos[k + 1] -= dt * (0.4 + (i % 5) * 0.12); // медленно оседающий пепел
       this.pos[k] += Math.sin(time * 0.7 + this.drift[i]) * dt * 0.6 + dt * 0.5;
       // держим хлопья в кубе 50×20×50 вокруг камеры
       if (this.pos[k + 1] < cam.y - 4) this.pos[k + 1] += 20;

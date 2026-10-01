@@ -114,6 +114,7 @@ export class Enemies {
     const G = this.G;
     e.hp -= amount;
     e.flashT = 0.08;
+    if (e.type === 'heavy' || e.type === 'boss') this.lastElite = e;
     const small = source === 'thermal';
     if (!small || Math.random() < 0.15) G.fx.bloodBurst(point, e.type === 'boss' ? 0.6 : 0.8, dir ? { x: dir.x * 2, y: 1, z: dir.z * 2 } : null);
     if (source === 'thermal' && Math.random() < 0.3) G.fx.sparks.burst(point, 3, 0xffa040, { speed: 2, life: 0.4, gravity: -2, size: 0.06 });

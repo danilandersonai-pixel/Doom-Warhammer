@@ -79,32 +79,43 @@ canvas.pix, #advisor, #portrait, #weaponIcon { image-rendering: pixelated; image
 @keyframes pulse { 50% { transform: scale(1.15); } }
 #edgeArrow { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); filter: drop-shadow(0 2px 0 rgba(0,0,0,0.4)); }
 
-/* ---------- полоса босса ---------- */
-#bossbar { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 84px); left: 50%; transform: translateX(-50%); width: min(46vw, 520px); text-align: center; }
-#bossbar .name { font-size: 18px; letter-spacing: 3px; color: #ffd6a0; text-shadow: 0 2px 0 #000; }
-#bossbar .bar { height: 10px; background: rgba(20,10,10,0.7); border: 1px solid var(--gold); }
-#bossFill { height: 100%; background: linear-gradient(#ff4020, #9a1408); transform-origin: left; }
+/* ---------- элитный враг: полоса и имя сверху ---------- */
+#bossbar { position: absolute; top: max(3.5vh, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: 23vw; text-align: center; }
+#bossbar .bar { position: relative; height: 1.9vh; min-height: 6px; background: #120c0c; border: 2px solid #3a3230; box-shadow: 0 0 0 1px #000; }
+#bossFill, #bossLost { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; transform-origin: left; }
+#bossLost { background: #e8e2d8; transition: transform 0.6s 0.25s; }
+#bossFill { background: linear-gradient(#e83020, #9a1408); z-index: 1; }
+#bossbar .name { margin-top: 0.6vh; font-size: clamp(13px, 4.2vh, 26px); letter-spacing: 1px; color: #e8e4dc; text-shadow: 0 2px 0 #000, 0 0 4px #000; text-transform: uppercase; }
 
-/* ---------- нижняя панель ---------- */
+/* ---------- патроны и гранаты (лайм) ---------- */
+#ammoBox { position: absolute; left: 33.2vw; top: 58.5vh; display: flex; align-items: center; gap: 1vh; }
+#ammoBox .bracket { position: relative; padding: 1vh 1.6vh; }
+#ammoBox .bracket::before, #ammoBox .bracket::after { content: ''; position: absolute; top: 0; bottom: 0; width: 1.2vh; border: 2px solid rgba(187, 222, 3, 0.75); }
+#ammoBox .bracket::before { left: 0; border-right: 0; } #ammoBox .bracket::after { right: 0; border-left: 0; }
+#weaponIcon { display: block; width: 10vh; height: 4.2vh; filter: drop-shadow(0 0 4px rgba(187,222,3,0.6)); }
+#ammoBox .cnt { font-family: var(--pixel); line-height: 1.2; }
+#ammoText { font-size: clamp(9px, 3.4vh, 18px); color: #f4f4ec; text-shadow: 1px 1px 0 #000; }
+#ammoText.low { color: #ff5030; }
+#ammoRes { font-size: clamp(6px, 2vh, 11px); color: #bbde03; text-shadow: 1px 1px 0 #000; }
+#grenBox { position: absolute; left: 58.3vw; top: 59.5vh; display: flex; align-items: center; gap: 1vh; }
+#grenBox svg { width: 7.4vh; height: 7.4vh; filter: drop-shadow(0 0 4px rgba(187,222,3,0.5)); }
+#grenText { font-family: var(--pixel); font-size: clamp(9px, 3.4vh, 18px); color: #f4f4ec; text-shadow: 1px 1px 0 #000; }
+
+/* ---------- нижняя панель: портрет, числа, две полосы ---------- */
 #bottom {
   position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
   display: flex; align-items: flex-end; gap: 0; padding-bottom: env(safe-area-inset-bottom);
 }
-#weaponBox { display: flex; flex-direction: column; align-items: flex-end; margin: 0 10px 10px 0; text-shadow: 1px 1px 0 #000; }
-#weaponIcon { width: clamp(48px, 11vh, 84px); height: clamp(20px, 4.6vh, 35px); }
-#ammoText { font-family: var(--pixel); font-size: clamp(8px, 2.3vh, 13px); color: #fff3cc; margin-top: 2px; }
-#ammoText.low { color: #ff5030; }
-#grenText { font-family: var(--pixel); font-size: clamp(6px, 1.7vh, 9px); color: #c8d0dc; margin-top: 4px; }
-#portraitBox { width: clamp(52px, 15vh, 150px); height: clamp(52px, 15vh, 150px); position: relative; }
+#portraitBox { width: clamp(52px, 16vh, 160px); height: clamp(52px, 16vh, 160px); position: relative; margin-bottom: 3.6vh; }
 #portrait { width: 100%; height: 100%; display: block; }
 #numbers {
-  width: clamp(40px, 11vh, 70px); margin: 0 0 1.6vh -2px; padding: 0.9vh 0 1.1vh; text-align: center; font-family: var(--pixel);
-  background: rgba(28, 34, 26, 0.88); border: 1px solid #7a6a40; box-shadow: inset 0 0 0 1px #1a1a12;
+  width: clamp(34px, 9vh, 60px); margin: 0 0 3.6vh 2px; padding: 0.8vh 0 0.9vh; text-align: center; font-family: var(--pixel);
+  background: rgba(16, 34, 22, 0.92); border: 2px solid #2e3a2a; box-shadow: 0 0 0 1px #000;
 }
-#armorNum { font-size: clamp(7px, 2.2vh, 13px); color: var(--steel); }
-#healthNum { font-size: clamp(9px, 2.9vh, 17px); color: #f2f4e8; margin-top: 0.9vh; }
-#blade { width: clamp(100px, 33vh, 240px); height: clamp(26px, 8.6vh, 62px); margin: 0 0 1.8vh 2px; }
-#dashPip { position: absolute; left: 50%; bottom: 2px; width: 52px; height: 3px; transform: translateX(-50%); background: var(--lime); opacity: 0.8; transform-origin: left; }
+#armorNum, #healthNum { font-size: clamp(8px, 2.6vh, 15px); color: #f2f4e8; }
+#healthNum { margin-top: 0.7vh; }
+#blade { width: clamp(100px, 33vh, 260px); height: clamp(27px, 8.8vh, 70px); margin: 0 0 3.6vh 1px; }
+#dashPip { position: absolute; left: 50%; bottom: 1.6vh; width: 9vh; height: 3px; transform: translateX(-50%); background: var(--lime); opacity: 0.8; transform-origin: left; }
 
 #menuBtn {
   position: absolute; top: max(14px, env(safe-area-inset-top)); right: max(18px, env(safe-area-inset-right));
@@ -123,20 +134,22 @@ canvas.pix, #advisor, #portrait, #weaponIcon { image-rendering: pixelated; image
 #stickBase.active { opacity: 1; }
 #stickKnob { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px; border-radius: 50%; background: rgba(255,255,255,0.35); border: 2px solid rgba(255,255,255,0.6); }
 .tbtn {
-  position: absolute; width: calc(46px * var(--btn-scale)); height: calc(46px * var(--btn-scale)); border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.85); color: #fff; background: rgba(20, 24, 32, 0.18);
-  opacity: var(--btn-alpha); display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+  position: absolute; width: calc(11vh * var(--btn-scale)); height: calc(11vh * var(--btn-scale)); border-radius: 50%;
+  color: #bbde03; opacity: var(--btn-alpha); display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+  filter: drop-shadow(0 0 5px rgba(187, 222, 3, 0.55));
 }
-.tbtn svg { width: 56%; height: 56%; pointer-events: none; }
-.tbtn.big { width: calc(66px * var(--btn-scale)); height: calc(66px * var(--btn-scale)); }
-.tbtn.active { background: rgba(232, 184, 64, 0.45); border-color: var(--gold-hi); opacity: 1; }
-#btnFire { right: calc(max(16px, env(safe-area-inset-right)) + 0px); bottom: calc(22px * var(--btn-scale)); }
-#btnMelee { right: calc(max(16px, env(safe-area-inset-right)) + 80px * var(--btn-scale)); bottom: calc(14px * var(--btn-scale)); }
-#btnJump { right: calc(max(16px, env(safe-area-inset-right)) + 10px * var(--btn-scale)); bottom: calc(100px * var(--btn-scale)); }
-#btnDash { right: calc(max(16px, env(safe-area-inset-right)) + 66px * var(--btn-scale)); bottom: calc(74px * var(--btn-scale)); }
-#btnGrenade { right: calc(max(16px, env(safe-area-inset-right)) + 10px * var(--btn-scale)); bottom: calc(158px * var(--btn-scale)); }
-#btnReload { right: calc(max(16px, env(safe-area-inset-right)) + 64px * var(--btn-scale)); bottom: calc(132px * var(--btn-scale)); }
-
+.tbtn svg { width: 82%; height: 82%; pointer-events: none; }
+.tbtn.big { width: calc(15vh * var(--btn-scale)); height: calc(15vh * var(--btn-scale)); border: 2px solid rgba(187,222,3,0.45); background: rgba(30, 40, 10, 0.12); }
+.tbtn.big svg { width: 55%; height: 55%; }
+.tbtn.pict { background: radial-gradient(circle, rgba(20,30,8,0.35) 40%, transparent 72%); }
+.tbtn.ghost { opacity: 1; filter: none; border-radius: 12px; }
+.tbtn.active { opacity: 1; transform: scale(0.92); }
+#btnJump { left: 76.5vw; top: 32vh; }
+#btnDash { left: 85.5vw; top: 27vh; }
+#btnMelee { left: 67.5vw; top: 44vh; }
+#btnFire { right: calc(max(3vw, env(safe-area-inset-right))); bottom: 9vh; }
+#btnGrenade { left: 57vw; top: 57vh; width: 15vh; height: 11vh; }
+#btnReload { left: 32vw; top: 56vh; width: 26vh; height: 13vh; }
 body.touch #crosshair i { width: 3px; height: 3px; }
 
 /* ---------- экраны ---------- */

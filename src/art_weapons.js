@@ -11,6 +11,8 @@ const M = {
   glove: ramp('#6f7a8c', { spread: 0.48 }),
   leather: ramp('#5e3c2a', { spread: 0.4 }),
   cyan: [hex('#0e2a3a'), hex('#14607e'), hex('#2cb4e6'), hex('#8af2ff'), hex('#eaffff')],
+  blueArmor: ramp('#2a4aa6', { spread: 0.5 }),
+  wood: ramp('#6a3a22', { spread: 0.45 }),
   heat: [hex('#3a0e06'), hex('#8e2208'), hex('#e05812'), hex('#ffac36'), hex('#fff2c6')],
 };
 const W = 192, H = 144;
@@ -197,6 +199,78 @@ function drawChainblade({ hilt = [146, 138], ang = -2.12, len = 176, teeth = 0, 
   return P.outline();
 }
 
+
+// ---------- Оружие в ракурсе "сзади-сбоку", низко справа (как в видео-эталоне) ----------
+// Виден задний торец (сталь, круглая крышка, прорезь прицела), верх и левый бок корпуса,
+// золотая плетёная лента и синий бронированный наруч. kind: rifle | shotgun | plasma | thermal
+function drawGunRear(kind, { glow = 0, casingOut = false } = {}) {
+  const P = new Pix(W, H);
+  const side = kind === 'shotgun' ? M.wood : kind === 'plasma' ? M.steel : M.casing;
+  const top = kind === 'plasma' ? M.iron : kind === 'thermal' ? M.steel : M.casing;
+  // наруч (синяя броня) снизу слева, уходит за край
+  poly(P, [[6, 144], [58, 100], [98, 110], [104, 144]], M.blueArmor, { round: 6, grad: 0.2 });
+  poly(P, [[52, 104], [62, 96], [102, 108], [100, 118]], M.brass, { round: 2 });
+  poly(P, [[22, 144], [64, 112], [70, 120], [34, 144]], M.blueArmor, { round: 3, bias: 0.2 });
+  // ствол/дуло, уходящее вперёд-влево (рисуем первым — дальше всего)
+  if (kind === 'shotgun') {
+    for (const [bx, by] of [[92, 14], [110, 10]]) { blob(P, bx, by, 9, 7, M.iron, { round: 3 }); blob(P, bx, by, 5, 4, [hex('#050506'), hex('#101014'), hex('#18181e'), hex('#22222a'), hex('#2c2c36')], { round: 1, contour: false }); }
+  } else if (kind === 'thermal') {
+    blob(P, 100, 16, 18, 11, M.iron, { round: 4 });
+    blob(P, 100, 16, 12, 7, M.heat, { round: 4, bias: glow - 0.2, contour: false });
+    blob(P, 100, 16, 5, 3, M.heat, { round: 2, bias: glow + 0.3, contour: false });
+  } else {
+    poly(P, [[86, 12], [116, 6], [122, 18], [92, 24]], M.iron, { round: 2 });
+    blob(P, 94, 18, 6, 5, M.iron, { round: 2, bias: -0.3 });
+    if (kind === 'plasma') blob(P, 94, 18, 4, 3, M.cyan, { round: 2, bias: 0.3 + glow, contour: false });
+  }
+  // левый бок корпуса
+  poly(P, [[80, 22], [114, 56], [118, 146], [84, 146], [70, 66]], side, { round: 6, grad: 0.15, bias: -0.1, tex: kind === 'shotgun' ? (x, y) => (((x * 3 + y) % 9) === 0 ? -0.8 : 0) : null });
+  // верхняя грань
+  poly(P, [[80, 22], [132, 12], [168, 50], [114, 56]], top, { round: 5, grad: -0.2, bias: 0.15, tex: kind === 'plasma' ? (x, y) => ((x + y * 2) % 8 === 0 ? -1.2 : 0) : null });
+  // планка и мушка на верхней грани
+  poly(P, [[104, 22], [118, 19], [146, 47], [132, 51]], M.iron, { round: 2, tex: (x, y) => ((x + y) % 5 === 0 ? -1 : 0) });
+  P.fill(P.mask().rect(108, 12, 4, 10), M.steel, { round: 1 });
+  // латунная окантовка граней
+  for (const [a, b] of [[[80, 22], [114, 56]], [[114, 56], [168, 50]], [[80, 22], [132, 12]], [[114, 56], [118, 146]]]) P.fill(P.mask().limb(a[0], a[1], b[0], b[1], 1.6), M.brass, { round: 1 });
+  // задний торец: сталь, круглая крышка, прорезь прицела
+  poly(P, [[114, 56], [168, 50], [174, 146], [118, 148]], M.iron, { round: 6, bias: -0.05 });
+  blob(P, 143, 80, 16, 17, M.steel, { round: 6 });
+  blob(P, 143, 80, 9, 10, M.iron, { round: 3, bias: 0.1 });
+  blob(P, 141, 78, 3, 3, M.steel, { round: 1, bias: 0.4 });
+  P.fill(P.mask().rect(128, 104, 38, 30), M.steel, { round: 3, bias: -0.15 });
+  P.fill(P.mask().rect(133, 110, 28, 18), M.iron, { round: 2, bias: -0.4 });
+  P.set(147, 118, hex('#ff4020')); P.set(148, 118, hex('#ff4020'));
+  // детали бока: эмблема, свечение катушек, бак
+  if (kind === 'rifle' || kind === 'thermal') emblem(P, 96, 88);
+  if (kind === 'plasma') for (let i = 0; i < 4; i++) P.fill(P.mask().limb(78 + i * 6, 60 + i * 18, 108 + i * 2, 66 + i * 18, 2.2), M.cyan, { round: 1, bias: glow, contour: false });
+  if (kind === 'thermal') { limb(P, [64, 70], [76, 136], 9, 10, M.casing, { round: 5 }); for (const yy of [80, 124]) blob(P, 70, yy, 11, 4, M.brass, { round: 2 }); }
+  // золотая плетёная лента вдоль бока
+  for (let i = 0; i < 16; i++) {
+    const t = i / 15, x = 84 - t * 16 + Math.sin(t * 3) * 3, y = 34 + t * 88;
+    blob(P, x, y, 3.2, 2.6, M.brass, { round: 2, bias: i % 2 ? 0.2 : -0.1 }, 0.6);
+  }
+  // перчатка на рукояти под торцом
+  blob(P, 132, 146, 22, 12, M.blueArmor, { round: 5 });
+  for (let k = 0; k < 4; k++) blob(P, 114 + k * 9, 138, 5, 4, M.blueArmor, { round: 2, bias: 0.15 });
+  if (casingOut) {
+    P.fill(P.mask().limb(58, 40, 66, 34, 3), M.brass, { round: 2 });                 // гильза летит влево
+    P.fill(P.mask().limb(40, 58, 47, 54, 2.6), M.brass, { round: 2, bias: -0.2 });
+  }
+  return P.outline();
+}
+
+// "Подсвеченный" кадр: всё оружие залито тёплым светом вспышки (как в видео при выстреле)
+function litCanvas(c, color = 'rgba(255,196,80,0.55)') {
+  const o = document.createElement('canvas');
+  o.width = c.width; o.height = c.height;
+  const g = o.getContext('2d');
+  g.drawImage(c, 0, 0);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = color;
+  g.fillRect(0, 0, o.width, o.height);
+  return o;
+}
+
 // ---------- Бросок гранаты: рука с гранатой ----------
 function drawThrow() {
   const P = new Pix(W, H);
@@ -235,13 +309,11 @@ export function weaponSprites() {
   const prevDither = Pix.dither;
   Pix.dither = 0.22; // на оружии тона ровнее, как в эталоне
   Pix.rim = true; Pix.shine = 0.5; // светлые кромки и блики на металле
-  const rifleIdle = drawRifle();
-  const shotIdle = drawShotgun();
   cache = {
-    rifle: { idle: rifleIdle, fire: drawRifle({ casingOut: true }), muzzle: [107, 2] },
-    shotgun: { idle: shotIdle, fire: shotIdle, reload: shotIdle.rotated(0.35, 110, 150, 0, 14), muzzle: [104, 6] },
-    plasma: { idle: drawPlasma({ glow: 0 }), idle2: drawPlasma({ glow: 0.25 }), fire: drawPlasma({ glow: 0.7 }), muzzle: [104, 4] },
-    thermal: { idle: drawThermal({ hot: 0 }), fire: drawThermal({ hot: 0.8 }), muzzle: [105, 22] },
+    rifle: { idle: drawGunRear('rifle'), fire: drawGunRear('rifle', { casingOut: true }), muzzle: [90, 14], side: true },
+    shotgun: { idle: drawGunRear('shotgun'), fire: drawGunRear('shotgun'), muzzle: [100, 10], side: true },
+    plasma: { idle: drawGunRear('plasma'), idle2: drawGunRear('plasma', { glow: 0.25 }), fire: drawGunRear('plasma', { glow: 0.7 }), muzzle: [92, 16], side: true },
+    thermal: { idle: drawGunRear('thermal'), fire: drawGunRear('thermal', { glow: 0.8 }), muzzle: [100, 14], side: true },
     chainblade: {
       idle: drawChainblade({ teeth: 0 }),
       idle2: drawChainblade({ teeth: 3 }),
@@ -261,6 +333,7 @@ export function weaponSprites() {
     for (const [k, v] of Object.entries(w)) if (v instanceof Pix) w[k] = v.toCanvas();
   }
   cache.throwHand = cache.throwHand.toCanvas();
+  for (const k of ['rifle', 'shotgun', 'plasma', 'thermal']) cache[k].lit = litCanvas(cache[k].fire, k === 'plasma' ? 'rgba(120,220,255,0.45)' : k === 'thermal' ? 'rgba(255,140,60,0.45)' : 'rgba(255,196,80,0.42)');
   cache.flash = cache.flash.map((f) => f.toCanvas());
   cache.flashBlue = cache.flashBlue.toCanvas();
   Pix.dither = prevDither;

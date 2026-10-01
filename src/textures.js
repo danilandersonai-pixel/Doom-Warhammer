@@ -71,9 +71,9 @@ function rock() {
     let v = 0.55 + facet + (fbm(n, x / 16, y / 16) - 0.5) * 0.35;
     if (edge < 1.6) v = 0.22;                    // трещина между гранями
     else if (edge < 3) v += 0.12;                 // светлая кромка
-    const c = mix(hex('#4a4656'), hex('#9a96a8'), clamp(v, 0, 1));
+    const c = mix(hex('#33281f'), hex('#86705c'), clamp(v, 0, 1));
     T.set(x, y, c[0], c[1], c[2]);
-    if (edge < 1.6 && y % 3 === 0 && R() < 0.5) T.set(x, y, 225, 232, 242); // снег в щелях
+    
   }
   for (let i = 0; i < 30; i++) { const x = R() * 128 | 0, y = R() * 128 | 0; T.set(x, y, 110, 130, 90); T.set(x + 1, y, 90, 110, 70); } // лишайник
   return T.done();
@@ -297,14 +297,109 @@ function banner(friend) {
   return T.done();
 }
 
+
+// ======== Готический собор (по видео-эталону): плиты пола, резной камень, бронзовые контейнеры ========
+
+// Крупные плиты пола (256): серо-бежевый камень, тёмные швы, трещины, потёртости
+function flagstones(dark = false) {
+  const T = canvasRGBA(256, 256), R = rng(dark ? 41 : 40), n = noise2(dark ? 43 : 42);
+  const A = dark ? hex('#4c463f') : hex('#615a51'), B = dark ? hex('#8a8276') : hex('#a69d8f');
+  for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
+    const v = 0.5 + (fbm(n, x / 10, y / 10) - 0.5) * 0.45 + (fbm(n, x / 70 + 9, y / 70) - 0.5) * 0.4;
+    const c = mix(A, B, clamp(v, 0, 1));
+    T.set(x, y, c[0], c[1], c[2]);
+  }
+  // раскладка плит: ряды разной высоты, плиты разной ширины
+  const rows = [0, 72, 136, 200, 256];
+  for (let r = 0; r < 4; r++) {
+    const y0 = rows[r], y1 = rows[r + 1];
+    let x = (r * 53) % 64;
+    const xs = [];
+    while (x < 256 + 64) { xs.push(x); x += 70 + R() * 50 | 0; }
+    for (let i = 0; i < xs.length - 1; i++) {
+      const xa = xs[i], xb = xs[i + 1], tone = 0.86 + R() * 0.26;
+      for (let yy = y0; yy < y1; yy++) for (let xx = xa; xx < xb; xx++) {
+        const lx = xx - xa, ly = yy - y0;
+        if (ly < 3 || lx < 3) { T.set(xx, yy, 34, 30, 28); continue; }             // шов
+        if (ly === 3 || lx === 3) { T.shade(xx, yy, 1.25 * tone); continue; }      // светлая кромка
+        if (ly > y1 - y0 - 3 || lx > xb - xa - 3) { T.shade(xx, yy, 0.72 * tone); continue; }
+        T.shade(xx, yy, tone);
+      }
+      // трещина
+      if (R() < 0.45) { let cx = xa + 10 + R() * (xb - xa - 20), cy = y0 + 8; for (let k = 0; k < (y1 - y0) * 0.7; k++) { T.set(cx | 0, cy | 0, 40, 36, 32); cx += R() * 2 - 1; cy += 1; } }
+    }
+  }
+  for (let i = 0; i < 260; i++) T.shade(R() * 256 | 0, R() * 256 | 0, 0.8);   // выбоины
+  return T.done();
+}
+
+// Резной камень стен (128): ржаво-коричневый, стрельчатая ниша с черепом, колонки-каннелюры по бокам
+function gothicStone() {
+  const T = canvasRGBA(128, 128), R = rng(51), n = noise2(53);
+  for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+    const v = 0.5 + (fbm(n, x / 8, y / 8) - 0.5) * 0.5 + (fbm(n, x / 40, y / 40 + 5) - 0.5) * 0.35;
+    const c = mix(hex('#3e2e26'), hex('#8a6e58'), clamp(v, 0, 1));
+    T.set(x, y, c[0], c[1], c[2]);
+  }
+  // горизонтальные пояса-карнизы сверху и снизу
+  for (let x = 0; x < 128; x++) for (let t = 0; t < 10; t++) {
+    const k = t < 2 ? 1.35 : t < 7 ? 1.08 : 0.62;
+    T.shade(x, t, k); T.shade(x, 118 + t, t < 2 ? 1.3 : t < 6 ? 0.95 : 0.6);
+  }
+  // каннелюры (вертикальные желобки) по бокам
+  for (const x0 of [4, 112]) for (let y = 10; y < 118; y++) for (let i = 0; i < 12; i++) T.shade(x0 + i, y, i % 4 === 0 ? 0.6 : i % 4 === 1 ? 1.25 : 1);
+  // стрельчатая ниша (арка) в центре
+  const cx = 64, top = 18, bot = 112, hw = 34;
+  for (let y = top; y < bot; y++) for (let x = cx - hw; x <= cx + hw; x++) {
+    const dx = Math.abs(x - cx), dy = y - top;
+    const archH = 40, inArch = dy >= archH || Math.hypot(hw - dx + 14, archH - dy) < hw + 14 - 0;
+    if (!inArch) continue;
+    const inner = dy >= archH + 4 ? dx < hw - 5 : Math.hypot(hw - dx + 14, archH - dy) < hw + 8;
+    if (!inner) { T.shade(x, y, x < cx ? 1.4 : 0.75); continue; }   // рамка арки: свет слева, тень справа
+    T.shade(x, y, 0.55 + (dy / (bot - top)) * 0.15);                 // глубина ниши
+  }
+  // череп-рельеф в нише (свой простой рисунок)
+  const sx = 64, sy = 70;
+  for (let y = -12; y <= 12; y++) for (let x = -10; x <= 10; x++) {
+    const head = (x * x) / 100 + ((y + 2) * (y + 2)) / 110 < 1, jaw = y > 5 && Math.abs(x) < 6;
+    if (!head && !jaw) continue;
+    let k = 1.55 - (x + y) * 0.02;
+    if ((Math.hypot(x + 4, y + 1) < 3 || Math.hypot(x - 4, y + 1) < 3)) k = 0.45;   // глазницы
+    if (Math.abs(x) < 1.5 && y > 2 && y < 5) k = 0.6;                               // нос
+    if (y > 7 && x % 3 === 0) k = 0.7;                                              // зубы
+    T.shade(sx + x, sy + y, k);
+  }
+  // потёки и сколы
+  for (let i = 0; i < 8; i++) { const x = R() * 128 | 0, len = 10 + R() * 40; for (let y = 10; y < 10 + len; y++) T.shade(x, y, 0.85); }
+  for (let i = 0; i < 120; i++) T.shade(R() * 128 | 0, R() * 128 | 0, R() < 0.5 ? 0.75 : 1.2);
+  return T.done();
+}
+
+// Бронзово-зелёный контейнер (128): рамы, латунная окантовка, крест-накрест, круглая печать
+function container() {
+  const T = canvasRGBA(128, 128), R = rng(61), n = noise2(63);
+  for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+    const v = 0.5 + (fbm(n, x / 9, y / 9) - 0.5) * 0.45;
+    const c = mix(hex('#1e2a24'), hex('#4e6250'), v);
+    T.set(x, y, c[0], c[1], c[2]);
+  }
+  const gold = (x, y, k = 1) => { const c = mix(hex('#6a4a1c'), hex('#d8a648'), k); T.set(x, y, c[0], c[1], c[2]); };
+  for (let i = 0; i < 128; i++) for (let t = 0; t < 7; t++) { const k = t < 2 ? 1 : t < 5 ? 0.6 : 0.3; gold(i, t, k); gold(t, i, k); gold(i, 127 - t, k * 0.8); gold(127 - t, i, k * 0.8); }
+  for (let i = 8; i < 120; i++) { gold(i, i, 0.5); gold(i + 1, i, 0.8); gold(127 - i, i, 0.5); gold(128 - i, i, 0.8); }  // крест-накрест
+  for (let a = 0; a < 6.28; a += 0.02) for (let r = 12; r < 17; r++) gold(64 + Math.cos(a) * r | 0, 64 + Math.sin(a) * r | 0, r < 14 ? 1 : 0.5);
+  for (let y = -6; y <= 6; y++) for (let x = -5; x <= 5; x++) if ((x * x) / 25 + (y * y) / 36 < 1) gold(64 + x, 64 + y, 0.4 + (5 - x) * 0.06);
+  for (let i = 0; i < 90; i++) T.shade(R() * 128 | 0, R() * 128 | 0, 0.7);
+  return T.done();
+}
+
 let cache = null;
 export function envTextures() {
   if (cache) return cache;
   const tex = (c) => nearestTexture(c, true);
   cache = {
-    snow: tex(snow()), rock: tex(rock()), blocks: tex(blocks()), metal: tex(metal()),
-    sandbags: tex(sandbags()), bag: tex(bag()), crate: tex(crate()), barrel: tex(barrel()), gate: tex(gate()),
-    tiles: tex(tiles()), hull: tex(hull()), bannerFriend: tex(banner(true)), bannerEnemy: tex(banner(false)),
+    snow: tex(flagstones()), rock: tex(rock()), blocks: tex(gothicStone()), metal: tex(metal()),
+    sandbags: tex(sandbags()), bag: tex(bag()), crate: tex(container()), barrel: tex(barrel()), gate: tex(gate()),
+    tiles: tex(flagstones(true)), hull: tex(hull()), bannerFriend: tex(banner(true)), bannerEnemy: tex(banner(false)),
   };
   return cache;
 }

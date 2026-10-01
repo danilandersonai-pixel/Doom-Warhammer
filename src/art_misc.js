@@ -232,8 +232,9 @@ function fireFrames() {
 // ---------- Золотая метка-след (16×16, шеврон) ----------
 function footprint() {
   const P = new Pix(16, 16);
-  P.fill(P.mask().poly([[2, 12], [8, 4], [14, 12], [11, 13], [8, 9], [5, 13]]), M.gold, { round: 2, contour: false, bias: 0.15 });
-  return P.outline([90, 60, 10]);
+  // светящийся золотой шеврон: тёмная кайма, яркая середина
+  P.fill(P.mask().poly([[1, 13], [8, 3], [15, 13], [11, 14], [8, 9], [5, 14]]), [hex('#5a3a08'), hex('#a8741a'), hex('#e8b440'), hex('#ffe08a'), hex('#fff6d8')], { round: 2, contour: false, bias: 0.25 });
+  return P;
 }
 
 // ---------- Сгусток плазмы и огненный снаряд врага (16×16) ----------

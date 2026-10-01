@@ -6,7 +6,7 @@ import { enemySheet } from './art_chars.js';
 import { miscArt, haloCanvas } from './art_misc.js';
 import { nearestTexture, rng } from './pixel.js';
 
-export const FOG_COLOR = 0xa9bcd6;
+export const FOG_COLOR = 0x6a7896;
 
 // Коробка, у которой UV растянуты по размеру (texScale метров на один повтор текстуры)
 function boxGeo(w, h, d, texScale) {
@@ -94,9 +94,10 @@ export function buildLevel(scene, world) {
 
   // ---------------- Небо, туман, свет ----------------
   scene.background = new THREE.Color(FOG_COLOR);
-  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.02);
+  // крупный тёмный фон: шпили собора за стенами (подсвечены дымкой)
+  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.026);
   const skyGeo = new THREE.SphereGeometry(400, 32, 16);
-  const top = new THREE.Color(0x6f8db8), hor = new THREE.Color(FOG_COLOR), cols = [];
+  const top = new THREE.Color(0x222a3a), hor = new THREE.Color(FOG_COLOR), cols = [];
   const sp = skyGeo.attributes.position;
   for (let i = 0; i < sp.count; i++) {
     const t = Math.max(0, sp.getY(i) / 400);
@@ -110,14 +111,14 @@ export function buildLevel(scene, world) {
   const sunHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, fog: false, depthWrite: false, transparent: true, opacity: 0.85 }));
   sunHalo.scale.set(140, 140, 1);
   sunHalo.position.set(150, 170, -260);
-  scene.add(sunHalo);
+  // пасмурное небо: светило не показываем
   const disc = new THREE.Mesh(new THREE.CircleGeometry(16, 32), new THREE.MeshBasicMaterial({ color: 0xfbf8ee, fog: false }));
   disc.position.copy(sunHalo.position);
   disc.lookAt(0, 0, 0);
-  scene.add(disc);
 
-  scene.add(new THREE.HemisphereLight(0xdfe9f7, 0x4a5262, 0.95));
-  const sun = new THREE.DirectionalLight(0xffe4bc, 1.5);
+
+  scene.add(new THREE.HemisphereLight(0xc4ccdc, 0x5a4636, 1.55));
+  const sun = new THREE.DirectionalLight(0xffdcae, 1.35);
   sun.position.set(30, 50, -40);
   scene.add(sun);
 
@@ -126,14 +127,14 @@ export function buildLevel(scene, world) {
   const ico = new THREE.IcosahedronGeometry(1, 1);
   for (let i = 0; i < 22; i++) {
     const a = (i / 22) * Math.PI * 2 + R() * 0.2, d = 150 + R() * 70;
-    const m = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x8a9cb8), 0.25 + R() * 0.2)));
+    const m = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x1c2230), 0.35 + R() * 0.25)));
     const h = 40 + R() * 70;
     m.scale.set(30 + R() * 30, h, 30 + R() * 30);
     m.position.set(Math.cos(a) * d, h * 0.25, Math.sin(a) * d);
     m.rotation.y = R() * 3;
     scene.add(m);
     // снежные шапки
-    const capM = new THREE.Mesh(ico, hazeMat(new THREE.Color(0xdde6f2)));
+    const capM = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x2a3242), 0.4)));
     capM.scale.set(m.scale.x * 0.45, h * 0.35, m.scale.z * 0.45);
     capM.position.set(m.position.x, m.position.y + h * 0.6, m.position.z);
     scene.add(capM);
@@ -141,7 +142,7 @@ export function buildLevel(scene, world) {
   const cone4 = new THREE.ConeGeometry(1, 1, 4);
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * Math.PI * 2 + R() * 0.3, d = 70 + R() * 30;
-    const c = new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x5a6a86), 0.25 + R() * 0.15);
+    const c = new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x141824), 0.4 + R() * 0.25);
     const w = 3 + R() * 4, h = 14 + R() * 26;
     const tower = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), hazeMat(c));
     tower.position.set(Math.cos(a) * d, h / 2 - 2, Math.sin(a) * d);
@@ -282,7 +283,7 @@ export function buildLevel(scene, world) {
   const suv = slabGeo.attributes.uv;
   for (let i = 0; i < suv.count; i++) suv.setXY(i, suv.getX(i) / 2.4 + 0.5, suv.getY(i) / 2.4);
   function slab(x, z, rotY = 0) {
-    const m = new THREE.Mesh(slabGeo, M.metal);
+    const m = new THREE.Mesh(slabGeo, M.crate);
     m.position.set(x, 0, z);
     m.rotation.y = rotY;
     scene.add(m);
@@ -291,7 +292,7 @@ export function buildLevel(scene, world) {
     world.box(x, z, vertical ? 0.6 : 2.6, vertical ? 2.6 : 0.6, 0, 2.0);
     contactShadow(x, z, 2.6, 0.6, 0, rotY);
     // снежный налёт на верхушке
-    const cap = new THREE.Mesh(boxGeo(1.75, 0.08, 0.56, 2), M.snow);
+    const cap = new THREE.Mesh(boxGeo(1.75, 0.08, 0.56, 2), M.metal);
     cap.position.set(x, 2.03, z);
     cap.rotation.y = rotY;
     scene.add(cap);

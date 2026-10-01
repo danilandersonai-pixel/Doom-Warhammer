@@ -282,20 +282,23 @@ export class Weapons {
     if (k === 'plasma') frame = this.flashT > 0 ? set.fire : Math.floor(time * 4) % 2 ? set.idle2 : set.idle;
     if (k === 'thermal' && this.beamOn) frame = set.fire;
     if (k === 'rifle' && this.recoil > 0.5) frame = set.fire;
-    if (k === 'shotgun' && this.reloadT > 0) frame = set.reload;
+    if (k === 'shotgun' && this.recoil > 0.5) frame = set.fire;
+    // при выстреле всё оружие залито тёплым светом вспышки
+    if (set.lit && (this.flashT > 0 || this.beamOn)) frame = set.lit;
 
     // смещения: покачивание, отдача, смена, перезарядка
     const bob = P.speed01 * (P.onGround ? 1 : 0.3);
-    let x = OW / 2 - 96 + 58 + Math.cos(P.bob) * 5 * bob;
-    let y = OH - 144 + 14 + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
+    // стрелковое оружие — низко справа (как в эталоне), клинок — по центру
+    const baseX = set.side ? OW - 192 + 8 - OW * 0.06 : OW / 2 - 96 + 58, baseY = set.side ? OH - 144 + 8 : OH - 144 + 14;
+    let x = baseX + Math.cos(P.bob) * 5 * bob;
+    let y = baseY + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
     y += this.switchT * 150;
     // лёгкий наклон: оружие держат по диагонали, ствол смотрит в центр экрана
-    let rot = k === 'chainblade' ? 0 : -0.13;
-    if (this.reloadT > 0 && k !== 'shotgun') {
+    let rot = 0;
+    if (this.reloadT > 0) {
       const p = 1 - this.reloadT / this.def.reload, s = Math.sin(p * Math.PI);
-      y += s * 46; rot = -0.13 - s * 0.35;
+      y += s * 46; rot = s * 0.3;
     }
-    if (k === 'shotgun' && this.reloadT > 0) y += Math.sin((1 - this.reloadT / this.def.reload) * Math.PI) * 18;
     // в прыжке оружие чуть "отстаёт"
     y += Math.max(-8, Math.min(10, P.vel.y * -0.8));
 
