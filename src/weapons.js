@@ -272,8 +272,8 @@ export class Weapons {
         x: 0.15 + Math.random() * 0.7, y: 0.15 + Math.random() * 0.65,
         s: big ? 1.4 + Math.random() * 1.6 : 0.35 + Math.random() * 0.6,   // масштаб кляксы
         rot: Math.floor(Math.random() * 4), img: (Math.random() * 4) | 0,
-        a: big ? 0.55 : 0.9,                                            // крупные — полупрозрачные
-        life: 1 + Math.random() * 0.9, drip: 0,
+        a: 1,                                                           // сплошные, без прозрачности
+        life: 0.5 + Math.random() * 0.5, drip: 0,
       });
     }
   }
@@ -358,7 +358,7 @@ export class Weapons {
       b.drip += dt * 6;
       if (b.life <= 0) { this.screenBlood.splice(i, 1); continue; }
       const size = 64 * b.s, cx = Math.round(b.x * OW), cy = Math.round(b.y * OH + b.drip);
-      g.globalAlpha = Math.min(1, b.life * 1.4) * b.a;
+      g.globalAlpha = Math.min(1, b.life * 4) * b.a;   // держится и быстро гаснет в конце
       g.save();
       g.translate(cx, cy);
       g.rotate(b.rot * Math.PI / 2);

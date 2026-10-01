@@ -4,40 +4,40 @@
   112,
   128
  ],
- "rows": 17,
+ "frames": 136,
  "cols": 36,
  "gridRows": 4,
  "anims": {
   "idle": {
-   "row": 0,
+   "start": 0,
    "frames": 2,
    "dirs": 8,
    "fps": 3,
    "loop": true
   },
   "walk": {
-   "row": 2,
+   "start": 16,
    "frames": 6,
    "dirs": 8,
    "fps": 12,
    "loop": true
   },
   "attack": {
-   "row": 8,
+   "start": 64,
    "frames": 3,
    "dirs": 8,
    "fps": 10,
    "loop": false
   },
   "hit": {
-   "row": 11,
+   "start": 88,
    "frames": 1,
    "dirs": 8,
    "fps": 10,
    "loop": false
   },
   "death": {
-   "row": 12,
+   "start": 96,
    "frames": 5,
    "dirs": 8,
    "fps": 9,

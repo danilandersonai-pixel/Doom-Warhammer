@@ -4,47 +4,47 @@
   224,
   256
  ],
- "rows": 20,
+ "frames": 160,
  "cols": 18,
  "gridRows": 9,
  "anims": {
   "idle": {
-   "row": 0,
+   "start": 0,
    "frames": 2,
    "dirs": 8,
    "fps": 3,
    "loop": true
   },
   "walk": {
-   "row": 2,
+   "start": 16,
    "frames": 6,
    "dirs": 8,
    "fps": 7,
    "loop": true
   },
   "attack": {
-   "row": 8,
+   "start": 64,
    "frames": 3,
    "dirs": 8,
    "fps": 10,
    "loop": false
   },
   "smash": {
-   "row": 11,
+   "start": 88,
    "frames": 3,
    "dirs": 8,
    "fps": 8,
    "loop": false
   },
   "hit": {
-   "row": 14,
+   "start": 112,
    "frames": 1,
    "dirs": 8,
    "fps": 10,
    "loop": false
   },
   "death": {
-   "row": 15,
+   "start": 120,
    "frames": 5,
    "dirs": 8,
    "fps": 6,

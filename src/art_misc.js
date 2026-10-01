@@ -166,7 +166,7 @@ function bloodSplat(seed) {
   const m = disk(32, 32, 9 + R() * 5);
   for (let i = 0; i < 12; i++) { const a = R() * 6.28, d = 6 + R() * 16; m.ellipse(32 + Math.cos(a) * d, 32 + Math.sin(a) * d, 2 + R() * 5, 2 + R() * 4, a); }
   for (let i = 0; i < 26; i++) { const a = R() * 6.28, d = 14 + R() * 16; const r = 0.6 + R() * 1.8; m.ellipse(32 + Math.cos(a) * d, 32 + Math.sin(a) * d, r, r); }
-  P.fill(m, M.blood, { round: 3, grad: 0, bias: -0.15, contour: false, dither: 0.8 });
+  P.fill(m, M.blood, { round: 3, grad: 0, bias: -0.15, contour: false, dither: 0 });   // сплошные тона, без «сетки»
   return P;
 }
 

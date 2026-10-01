@@ -39,7 +39,7 @@ export class Enemies {
   spawn(type, x, y, z, { silent = false } = {}) {
     const t = TYPES[type], sh = this.sheets[type];
     const map = spriteTexture(sh);
-    const mat = new THREE.MeshLambertMaterial({ map, emissiveMap: map, emissive: 0x3a3434, alphaTest: 0.5, side: THREE.DoubleSide });
+    const mat = new THREE.MeshLambertMaterial({ map, emissiveMap: map, emissive: 0x6a6266, alphaTest: 0.5, side: THREE.DoubleSide });
     const sprite = new THREE.Mesh(spriteGeometry(sh), mat);
     const group = new THREE.Group();
     group.add(sprite);
@@ -162,7 +162,7 @@ export class Enemies {
     G.fx.gibs.burst(c, 8 * k, 7, 0.35 * Math.sqrt(k), e.pos.y);
     G.fx.bloodBurst(c, 2.5 * k);
     G.fx.blood.burst(c, 45 * k, 0xe21b22, { speed: 11, life: 1.3, gravity: 16, size: 0.16, sizeVar: 1.8, up: 0.6 });
-    G.fx.blood.burst(c, 18 * k, 0xff6670, { speed: 4, life: 0.9, gravity: 5, size: 0.6, sizeVar: 1, alpha: 0.5 });
+    G.fx.blood.burst(c, 18 * k, 0x8a0a12, { speed: 5, life: 1.0, gravity: 12, size: 0.28, sizeVar: 1.2 });
     e.sprite.visible = false;
     e.shadow.visible = false;
   }
@@ -499,7 +499,7 @@ export class Enemies {
     // белая вспышка от попадания и ярость босса
     const fl = e.flashT > 0;
     const rage = e.type === 'boss' && e.phase === 3 ? 0.25 + Math.sin(time * 10) * 0.15 : 0;
-    e.mat.emissive.setRGB(fl ? 1 : 0.23 + rage, fl ? 0.95 : 0.2, fl ? 0.9 : 0.2);
+    e.mat.emissive.setRGB(fl ? 1 : 0.42 + rage, fl ? 0.95 : 0.38, fl ? 0.9 : 0.4);   // спрайт уже освещён при запекании — сцена лишь подтемняет
   }
 
   // Смерть: 4 кадра падения, потом труп остаётся. Босс — серия взрывов.

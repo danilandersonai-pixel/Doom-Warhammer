@@ -58,6 +58,7 @@ export class Hud {
   objective(text, short) {
     this.el.objText.textContent = text;
     this.el.obj.classList.remove('dim');
+    this.cache.objDim = false;   // иначе set() не вернёт класс, и плашка останется поверх полосы элиты
     this.objTimer = 6;
     if (short) this.objectiveShort(short);
   }
@@ -157,6 +158,7 @@ export class Hud {
     const bh = el && el.active ? Math.round((el.hp / el.maxHp) * 200) : -1;
     this.set('boss', bh, (v) => {
       e.bossbar.classList.toggle('hidden', v < 0);
+      e.hud.classList.toggle('eliteOn', v >= 0);
       if (v >= 0) { e.bossFill.style.transform = `scaleX(${v / 200})`; e.bossLost.style.transform = `scaleX(${v / 200})`; }
     });
     this.set('eliteName', el ? el.type : '', (t) => { e.eliteName.textContent = t === 'boss' ? 'Колосс' : t === 'heavy' ? 'Тяжёлый демон' : ''; });

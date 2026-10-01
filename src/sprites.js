@@ -54,3 +54,14 @@ export function spriteGeometry(sheet, scale = 1) {
   g.translate(0, h / 2 - (m.cell[1] - m.footPx) * px, 0);
   return g;
 }
+
+// CC0-текстуры окружения (tools/make_textures.sh): картинки для основы процедурных текстур
+export const TEX_IMG = {};
+export async function loadTextureImages(names) {
+  await Promise.all(names.map(async (n) => {
+    const emb = window.__TEXTURES && window.__TEXTURES[n];
+    const img = new Image();
+    img.src = emb || `assets/textures/${n}.png`;
+    try { await img.decode(); TEX_IMG[n] = img; } catch { /* нет картинки — останется чистая процедурная текстура */ }
+  }));
+}

@@ -1,6 +1,7 @@
 // Процедурные текстуры окружения: тайлы 128–256 px, чёткие пиксели (NearestFilter),
 // но с деталями: заклёпки, швы, трещины, потёртости, копоть, снежный налёт, шум.
 import { nearestTexture, rng, noise2, hex } from './pixel.js';
+import { TEX_IMG } from './sprites.js';
 
 // Холст с прямым доступом к пикселям
 function canvasRGBA(w, h) {
@@ -392,14 +393,82 @@ function container() {
   return T.done();
 }
 
+// ======== Основа из CC0-фото (ambientCG, пикселизировано до 256 px) + свои процедурные детали ========
+// Картинка → холст; цвет умножается на tint (свой тон), далее поверх рисуем детали
+function fromImage(name, tint = [255, 255, 255], contrast = 1) {
+  const img = TEX_IMG[name];
+  if (!img) return null;
+  const T = canvasRGBA(img.width, img.height);
+  T.g.drawImage(img, 0, 0);
+  const src = T.g.getImageData(0, 0, T.w, T.h).data;
+  for (let i = 0; i < src.length; i += 4) {
+    const l = (src[i] + src[i + 1] + src[i + 2]) / 3;
+    for (let k = 0; k < 3; k++) {
+      const v = (l + (src[i + k] - l) * 0.6 - 128) * contrast + 128;   // немного обесцвечиваем и усиливаем контраст
+      T.d[i + k] = clamp(v * tint[k] / 255);
+    }
+    T.d[i + 3] = 255;
+  }
+  return T;
+}
+// Пятна: лужи, копоть, ржавые потёки
+function stains(T, seed, { puddles = 0, soot = 0, streaks = 0 } = {}) {
+  const R = rng(seed);
+  for (let i = 0; i < puddles; i++) {
+    const cx = R() * T.w, cy = R() * T.h, rx = 10 + R() * 22, ry = 6 + R() * 12;
+    for (let y = -ry; y <= ry; y++) for (let x = -rx; x <= rx; x++) {
+      const d = (x * x) / (rx * rx) + (y * y) / (ry * ry);
+      if (d < 1) T.shade(cx + x | 0, cy + y | 0, d > 0.8 ? 0.8 : (d < 0.15 && (x + y) % 5 === 0) ? 1.25 : 0.62);   // тёмная лужа с бликом
+    }
+  }
+  for (let i = 0; i < soot; i++) { const cx = R() * T.w, cy = R() * T.h, r = 6 + R() * 16; for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) { const d = Math.hypot(x, y) / r; if (d < 1 && R() > d * 0.8) T.shade(cx + x | 0, cy + y | 0, 0.72 + d * 0.2); } }
+  for (let i = 0; i < streaks; i++) { const x0 = R() * T.w | 0, y0 = R() * T.h * 0.4 | 0, len = 20 + R() * 60; for (let y = 0; y < len; y++) { const k = 1 - y / len; T.shade(x0 + (Math.sin(y * 0.2) > 0.9 ? 1 : 0), y0 + y, 1 - 0.3 * k); const [r, g, b] = T.get(x0, y0 + y); T.set(x0 + 1, y0 + y, r * 0.95 + 18 * k, g * 0.9, b * 0.8); } }
+}
+function floorCC0(dark) {
+  const T = fromImage('floor', dark ? [150, 136, 122] : [214, 196, 172], 1.15);
+  if (!T) return flagstones(dark);
+  stains(T, dark ? 81 : 80, { puddles: 3, soot: 6 });
+  return T.done();
+}
+function metalCC0() {
+  const T = fromImage('metal', [196, 190, 186], 1.1);
+  if (!T) return metal();
+  // рамка плиты и ряды заклёпок по краю
+  for (let i = 0; i < T.w; i++) for (const e of [0, 1, T.w - 2, T.w - 1]) { T.shade(i, e, e < 2 ? 1.35 : 0.55); T.shade(e, i, e < 2 ? 1.3 : 0.6); }
+  for (let i = 10; i < T.w - 6; i += 16) for (const [x, y] of [[i, 7], [i, T.h - 8], [7, i], [T.w - 8, i]]) { T.set(x, y, 214, 206, 190); T.set(x + 1, y + 1, 50, 46, 44); T.set(x + 1, y, 150, 144, 136); }
+  stains(T, 82, { streaks: 6, soot: 2 });
+  return T.done();
+}
+function rockCC0() {
+  const T = fromImage('rock', [176, 150, 128], 1.1);
+  if (!T) return rock();
+  stains(T, 83, { soot: 3 });
+  return T.done();
+}
+// Резной камень + копоть и потёки из ржавой CC0-текстуры (как грязь поверх)
+function gothicCC0() {
+  const base = gothicStone();
+  const img = TEX_IMG.rust;
+  if (!img) return base;
+  const g = base.getContext('2d');
+  g.globalCompositeOperation = 'multiply';
+  g.globalAlpha = 0.45;
+  g.filter = 'grayscale(1) contrast(1.4)';
+  g.drawImage(img, 0, 0, base.width, base.height);
+  g.filter = 'none';
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+  return base;
+}
+
 let cache = null;
 export function envTextures() {
   if (cache) return cache;
   const tex = (c) => nearestTexture(c, true);
   cache = {
-    snow: tex(flagstones()), rock: tex(rock()), blocks: tex(gothicStone()), metal: tex(metal()),
+    snow: tex(floorCC0(false)), rock: tex(rockCC0()), blocks: tex(gothicCC0()), metal: tex(metalCC0()),
     sandbags: tex(sandbags()), bag: tex(bag()), crate: tex(container()), barrel: tex(barrel()), gate: tex(gate()),
-    tiles: tex(flagstones(true)), hull: tex(hull()), bannerFriend: tex(banner(true)), bannerEnemy: tex(banner(false)),
+    tiles: tex(floorCC0(true)), hull: tex(hull()), bannerFriend: tex(banner(true)), bannerEnemy: tex(banner(false)),
   };
   return cache;
 }

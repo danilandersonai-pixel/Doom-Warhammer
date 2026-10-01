@@ -61,6 +61,10 @@ canvas.pix, #advisor, #portrait, #weaponIcon { image-rendering: pixelated; image
   font-size: clamp(14px, 2vw, 19px); color: #f4f1e8; text-shadow: 0 2px 0 #000, 0 0 6px rgba(0,0,0,0.5); opacity: 0; transition: opacity 0.4s; white-space: nowrap;
 }
 #objShort.show { opacity: 1; }
+/* плашка задачи, короткая строка и полоса элиты не накладываются друг на друга */
+#objective:not(.dim) ~ #objShort { opacity: 0 !important; }
+#objective:not(.dim) ~ #bossbar { top: calc(max(10px, env(safe-area-inset-top)) + clamp(44px, 14vh, 80px) + 1.5vh); }
+#hud.eliteOn #objShort { top: calc(max(3.5vh, env(safe-area-inset-top)) + clamp(13px, 4.2vh, 26px) + 4.5vh); }
 
 #banner {
   position: absolute; top: 30%; left: 16px; right: 16px; text-align: center;
@@ -94,12 +98,12 @@ canvas.pix, #advisor, #portrait, #weaponIcon { image-rendering: pixelated; image
 #ammoBox .bracket::before { left: 0; border-right: 0; } #ammoBox .bracket::after { right: 0; border-left: 0; }
 #weaponIcon { display: block; width: 10vh; height: 4.2vh; filter: drop-shadow(0 0 4px rgba(187,222,3,0.6)); }
 #ammoBox .cnt { font-family: var(--pixel); line-height: 1.2; }
-#ammoText { font-size: clamp(9px, 3.4vh, 18px); color: #f4f4ec; text-shadow: 1px 1px 0 #000; }
+#ammoText { font-size: clamp(16px, 4.6vh, 24px); color: #f4f4ec; text-shadow: 1px 1px 0 #000; }
 #ammoText.low { color: #ff5030; }
-#ammoRes { font-size: clamp(6px, 2vh, 11px); color: #bbde03; text-shadow: 1px 1px 0 #000; }
+#ammoRes { font-size: clamp(11px, 2.9vh, 15px); color: #bbde03; text-shadow: 1px 1px 0 #000; }
 #grenBox { position: absolute; left: 58.3vw; top: 59.5vh; display: flex; align-items: center; gap: 1vh; }
 #grenBox svg { width: 7.4vh; height: 7.4vh; filter: drop-shadow(0 0 4px rgba(187,222,3,0.5)); }
-#grenText { font-family: var(--pixel); font-size: clamp(9px, 3.4vh, 18px); color: #f4f4ec; text-shadow: 1px 1px 0 #000; }
+#grenText { font-family: var(--pixel); font-size: clamp(16px, 4.6vh, 24px); color: #f4f4ec; text-shadow: 1px 1px 0 #000; }
 
 /* ---------- нижняя панель: портрет, числа, две полосы ---------- */
 #bottom {
@@ -109,10 +113,10 @@ canvas.pix, #advisor, #portrait, #weaponIcon { image-rendering: pixelated; image
 #portraitBox { width: clamp(52px, 16vh, 160px); height: clamp(52px, 16vh, 160px); position: relative; margin-bottom: 3.6vh; }
 #portrait { width: 100%; height: 100%; display: block; }
 #numbers {
-  width: clamp(34px, 9vh, 60px); margin: 0 0 3.6vh 2px; padding: 0.8vh 0 0.9vh; text-align: center; font-family: var(--pixel);
+  width: clamp(46px, 12.5vh, 76px); margin: 0 0 3.6vh 2px; padding: 0.8vh 0 0.9vh; text-align: center; font-family: var(--pixel);
   background: rgba(16, 34, 22, 0.92); border: 2px solid #2e3a2a; box-shadow: 0 0 0 1px #000;
 }
-#armorNum, #healthNum { font-size: clamp(8px, 2.6vh, 15px); color: #f2f4e8; }
+#armorNum, #healthNum { font-size: clamp(13px, 3.6vh, 19px); color: #f2f4e8; }
 #healthNum { margin-top: 0.7vh; }
 #blade { width: clamp(100px, 33vh, 260px); height: clamp(27px, 8.8vh, 70px); margin: 0 0 3.6vh 1px; }
 #dashPip { position: absolute; left: 50%; bottom: 1.6vh; width: 9vh; height: 3px; transform: translateX(-50%); background: var(--lime); opacity: 0.8; transform-origin: left; }
@@ -181,3 +185,7 @@ body.touch #crosshair i { width: 3px; height: 3px; }
 
 /* очень низкий экран (телефон в альбоме): прячем длинные подсказки */
 @media (max-height: 430px) { #controlsHelp { display: none; } }
+
+/* виньетка: затемнение и холодный тон к краям кадра (дёшево, без постпроцессинга) */
+#vignette { position: fixed; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 75% 70% at 50% 45%, rgba(255,190,120,0.05) 0%, rgba(0,0,0,0) 55%, rgba(30,26,52,0.28) 85%, rgba(12,10,24,0.55) 100%); }
