@@ -236,8 +236,8 @@ function resize() {
   camera.userData.baseFov = w < h ? 92 : 76;
   camera.updateProjectionMatrix();
   // пиксельный слой: ~280 "пикселей" по высоте → оружие занимает ~45% кадра, пиксели крупные и чёткие
-  overlay.height = 280;
-  overlay.width = Math.round((280 * w) / h);
+  overlay.height = 220;
+  overlay.width = Math.round((220 * w) / h);
   G.fx.setScale(h * renderer.getPixelRatio());
 }
 window.addEventListener('resize', resize);

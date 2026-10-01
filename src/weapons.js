@@ -286,13 +286,14 @@ export class Weapons {
 
     // смещения: покачивание, отдача, смена, перезарядка
     const bob = P.speed01 * (P.onGround ? 1 : 0.3);
-    let x = OW / 2 - 96 + 34 + Math.cos(P.bob) * 5 * bob;
-    let y = OH - 144 + 22 + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
+    let x = OW / 2 - 96 + 58 + Math.cos(P.bob) * 5 * bob;
+    let y = OH - 144 + 14 + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
     y += this.switchT * 150;
-    let rot = 0;
+    // лёгкий наклон: оружие держат по диагонали, ствол смотрит в центр экрана
+    let rot = k === 'chainblade' ? 0 : -0.13;
     if (this.reloadT > 0 && k !== 'shotgun') {
       const p = 1 - this.reloadT / this.def.reload, s = Math.sin(p * Math.PI);
-      y += s * 46; rot = -s * 0.35;
+      y += s * 46; rot = -0.13 - s * 0.35;
     }
     if (k === 'shotgun' && this.reloadT > 0) y += Math.sin((1 - this.reloadT / this.def.reload) * Math.PI) * 18;
     // в прыжке оружие чуть "отстаёт"
@@ -305,10 +306,10 @@ export class Weapons {
       frame = this.spr.chainblade[name || 'idle'];
       if (!name) y += (this.swingT - 0.28) * 300;
       if (k !== 'chainblade' && !name) frame = null;
-      x = OW / 2 - 96 + 34; rot = 0;
-      if (k !== 'chainblade') y = OH - 144 + 22;
+      x = OW / 2 - 96 + 58; rot = 0;
+      if (k !== 'chainblade') y = OH - 144 + 14;
     }
-    if (this.throwT > 0) { frame = this.spr.throwHand; x = OW / 2 - 96 + 40; y = OH - 144 + 22 + (0.35 - this.throwT) * -40; rot = 0; }
+    if (this.throwT > 0) { frame = this.spr.throwHand; x = OW / 2 - 96 + 60; y = OH - 144 + 14 + (0.35 - this.throwT) * -40; rot = 0; }
 
     if (frame) {
       g.save();

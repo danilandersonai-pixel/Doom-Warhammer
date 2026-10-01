@@ -126,6 +126,8 @@ export class Mask {
 // ---------- Холст спрайта ----------
 export class Pix {
   static dither = 0.6; // сила дизеринга по умолчанию (оружие рисуем с меньшей)
+  static rim = false;  // светлая кромка на гранях, обращённых к свету
+  static shine = 0;    // >0 — яркие блики там, где поверхность смотрит прямо на свет
   constructor(w, h) {
     this.w = w;
     this.h = h;
@@ -167,7 +169,7 @@ export class Pix {
   // Залить маску материалом с объёмным затенением.
   // round — "толщина" скругления в пикселях (больше — мягче объём), grad — верх светлее низа,
   // tex(x,y) — добавка к тону (царапины, складки), contour — тёмная кромка там, где деталь лежит поверх другой.
-  fill(mask, rmp, { round = 3, grad = 0.25, bias = 0, dither = Pix.dither, contour = true, tilt = 1.8, tex = null, flat = false } = {}) {
+  fill(mask, rmp, { round = 3, grad = 0.25, bias = 0, dither = Pix.dither, contour = true, tilt = 1.8, tex = null, flat = false, rim = Pix.rim, shine = Pix.shine } = {}) {
     const { w, h } = this, M = mask.m, n = rmp.length;
     // 1) расстояние до края маски (два прохода "шахматным" способом)
     const D = new Float32Array(w * h);
@@ -221,7 +223,15 @@ export class Pix {
           if (outside && this.alpha(xx, yy) > 0) { idx = dx < 0 || dy < 0 ? Math.min(idx, 1) : 0; break; }
         }
       }
-      this.set(x, y, rmp[idx]);
+      // светлая кромка: край, обращённый к свету (сверху/слева пусто или другая деталь)
+      if (rim && idx > 0) {
+        const outUp = y === 0 || !M[(y - 1) * w + x], outLeft = x === 0 || !M[y * w + x - 1];
+        if (outUp || outLeft) idx = Math.min(n - 1, idx + 1);
+      }
+      let col = rmp[idx];
+      // блик: почти белый пиксель на самых освещённых местах
+      if (shine && v > 1 - shine * 0.25 && ((x + y) & 1) === 0) col = col.map((c) => Math.min(255, c + (255 - c) * 0.6));
+      this.set(x, y, col);
     }
     return this;
   }

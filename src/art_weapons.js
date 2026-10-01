@@ -234,6 +234,7 @@ export function weaponSprites() {
   if (cache) return cache;
   const prevDither = Pix.dither;
   Pix.dither = 0.22; // на оружии тона ровнее, как в эталоне
+  Pix.rim = true; Pix.shine = 0.5; // светлые кромки и блики на металле
   const rifleIdle = drawRifle();
   const shotIdle = drawShotgun();
   cache = {
@@ -263,6 +264,7 @@ export function weaponSprites() {
   cache.flash = cache.flash.map((f) => f.toCanvas());
   cache.flashBlue = cache.flashBlue.toCanvas();
   Pix.dither = prevDither;
+  Pix.rim = false; Pix.shine = 0;
   return cache;
 }
 
