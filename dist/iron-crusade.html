@@ -82,32 +82,43 @@ canvas.pix, #advisor, #portrait, #weaponIcon { image-rendering: pixelated; image
 @keyframes pulse { 50% { transform: scale(1.15); } }
 #edgeArrow { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); filter: drop-shadow(0 2px 0 rgba(0,0,0,0.4)); }
 
-/* ---------- полоса босса ---------- */
-#bossbar { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 84px); left: 50%; transform: translateX(-50%); width: min(46vw, 520px); text-align: center; }
-#bossbar .name { font-size: 18px; letter-spacing: 3px; color: #ffd6a0; text-shadow: 0 2px 0 #000; }
-#bossbar .bar { height: 10px; background: rgba(20,10,10,0.7); border: 1px solid var(--gold); }
-#bossFill { height: 100%; background: linear-gradient(#ff4020, #9a1408); transform-origin: left; }
+/* ---------- элитный враг: полоса и имя сверху ---------- */
+#bossbar { position: absolute; top: max(3.5vh, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: 23vw; text-align: center; }
+#bossbar .bar { position: relative; height: 1.9vh; min-height: 6px; background: #120c0c; border: 2px solid #3a3230; box-shadow: 0 0 0 1px #000; }
+#bossFill, #bossLost { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; transform-origin: left; }
+#bossLost { background: #e8e2d8; transition: transform 0.6s 0.25s; }
+#bossFill { background: linear-gradient(#e83020, #9a1408); z-index: 1; }
+#bossbar .name { margin-top: 0.6vh; font-size: clamp(13px, 4.2vh, 26px); letter-spacing: 1px; color: #e8e4dc; text-shadow: 0 2px 0 #000, 0 0 4px #000; text-transform: uppercase; }
 
-/* ---------- нижняя панель ---------- */
+/* ---------- патроны и гранаты (лайм) ---------- */
+#ammoBox { position: absolute; left: 33.2vw; top: 58.5vh; display: flex; align-items: center; gap: 1vh; }
+#ammoBox .bracket { position: relative; padding: 1vh 1.6vh; }
+#ammoBox .bracket::before, #ammoBox .bracket::after { content: ''; position: absolute; top: 0; bottom: 0; width: 1.2vh; border: 2px solid rgba(187, 222, 3, 0.75); }
+#ammoBox .bracket::before { left: 0; border-right: 0; } #ammoBox .bracket::after { right: 0; border-left: 0; }
+#weaponIcon { display: block; width: 10vh; height: 4.2vh; filter: drop-shadow(0 0 4px rgba(187,222,3,0.6)); }
+#ammoBox .cnt { font-family: var(--pixel); line-height: 1.2; }
+#ammoText { font-size: clamp(9px, 3.4vh, 18px); color: #f4f4ec; text-shadow: 1px 1px 0 #000; }
+#ammoText.low { color: #ff5030; }
+#ammoRes { font-size: clamp(6px, 2vh, 11px); color: #bbde03; text-shadow: 1px 1px 0 #000; }
+#grenBox { position: absolute; left: 58.3vw; top: 59.5vh; display: flex; align-items: center; gap: 1vh; }
+#grenBox svg { width: 7.4vh; height: 7.4vh; filter: drop-shadow(0 0 4px rgba(187,222,3,0.5)); }
+#grenText { font-family: var(--pixel); font-size: clamp(9px, 3.4vh, 18px); color: #f4f4ec; text-shadow: 1px 1px 0 #000; }
+
+/* ---------- нижняя панель: портрет, числа, две полосы ---------- */
 #bottom {
   position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
   display: flex; align-items: flex-end; gap: 0; padding-bottom: env(safe-area-inset-bottom);
 }
-#weaponBox { display: flex; flex-direction: column; align-items: flex-end; margin: 0 10px 10px 0; text-shadow: 1px 1px 0 #000; }
-#weaponIcon { width: clamp(48px, 11vh, 84px); height: clamp(20px, 4.6vh, 35px); }
-#ammoText { font-family: var(--pixel); font-size: clamp(8px, 2.3vh, 13px); color: #fff3cc; margin-top: 2px; }
-#ammoText.low { color: #ff5030; }
-#grenText { font-family: var(--pixel); font-size: clamp(6px, 1.7vh, 9px); color: #c8d0dc; margin-top: 4px; }
-#portraitBox { width: clamp(52px, 15vh, 150px); height: clamp(52px, 15vh, 150px); position: relative; }
+#portraitBox { width: clamp(52px, 16vh, 160px); height: clamp(52px, 16vh, 160px); position: relative; margin-bottom: 3.6vh; }
 #portrait { width: 100%; height: 100%; display: block; }
 #numbers {
-  width: clamp(40px, 11vh, 70px); margin: 0 0 1.6vh -2px; padding: 0.9vh 0 1.1vh; text-align: center; font-family: var(--pixel);
-  background: rgba(28, 34, 26, 0.88); border: 1px solid #7a6a40; box-shadow: inset 0 0 0 1px #1a1a12;
+  width: clamp(34px, 9vh, 60px); margin: 0 0 3.6vh 2px; padding: 0.8vh 0 0.9vh; text-align: center; font-family: var(--pixel);
+  background: rgba(16, 34, 22, 0.92); border: 2px solid #2e3a2a; box-shadow: 0 0 0 1px #000;
 }
-#armorNum { font-size: clamp(7px, 2.2vh, 13px); color: var(--steel); }
-#healthNum { font-size: clamp(9px, 2.9vh, 17px); color: #f2f4e8; margin-top: 0.9vh; }
-#blade { width: clamp(100px, 33vh, 240px); height: clamp(26px, 8.6vh, 62px); margin: 0 0 1.8vh 2px; }
-#dashPip { position: absolute; left: 50%; bottom: 2px; width: 52px; height: 3px; transform: translateX(-50%); background: var(--lime); opacity: 0.8; transform-origin: left; }
+#armorNum, #healthNum { font-size: clamp(8px, 2.6vh, 15px); color: #f2f4e8; }
+#healthNum { margin-top: 0.7vh; }
+#blade { width: clamp(100px, 33vh, 260px); height: clamp(27px, 8.8vh, 70px); margin: 0 0 3.6vh 1px; }
+#dashPip { position: absolute; left: 50%; bottom: 1.6vh; width: 9vh; height: 3px; transform: translateX(-50%); background: var(--lime); opacity: 0.8; transform-origin: left; }
 
 #menuBtn {
   position: absolute; top: max(14px, env(safe-area-inset-top)); right: max(18px, env(safe-area-inset-right));
@@ -126,20 +137,22 @@ canvas.pix, #advisor, #portrait, #weaponIcon { image-rendering: pixelated; image
 #stickBase.active { opacity: 1; }
 #stickKnob { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px; border-radius: 50%; background: rgba(255,255,255,0.35); border: 2px solid rgba(255,255,255,0.6); }
 .tbtn {
-  position: absolute; width: calc(46px * var(--btn-scale)); height: calc(46px * var(--btn-scale)); border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.85); color: #fff; background: rgba(20, 24, 32, 0.18);
-  opacity: var(--btn-alpha); display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+  position: absolute; width: calc(11vh * var(--btn-scale)); height: calc(11vh * var(--btn-scale)); border-radius: 50%;
+  color: #bbde03; opacity: var(--btn-alpha); display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+  filter: drop-shadow(0 0 5px rgba(187, 222, 3, 0.55));
 }
-.tbtn svg { width: 56%; height: 56%; pointer-events: none; }
-.tbtn.big { width: calc(66px * var(--btn-scale)); height: calc(66px * var(--btn-scale)); }
-.tbtn.active { background: rgba(232, 184, 64, 0.45); border-color: var(--gold-hi); opacity: 1; }
-#btnFire { right: calc(max(16px, env(safe-area-inset-right)) + 0px); bottom: calc(22px * var(--btn-scale)); }
-#btnMelee { right: calc(max(16px, env(safe-area-inset-right)) + 80px * var(--btn-scale)); bottom: calc(14px * var(--btn-scale)); }
-#btnJump { right: calc(max(16px, env(safe-area-inset-right)) + 10px * var(--btn-scale)); bottom: calc(100px * var(--btn-scale)); }
-#btnDash { right: calc(max(16px, env(safe-area-inset-right)) + 66px * var(--btn-scale)); bottom: calc(74px * var(--btn-scale)); }
-#btnGrenade { right: calc(max(16px, env(safe-area-inset-right)) + 10px * var(--btn-scale)); bottom: calc(158px * var(--btn-scale)); }
-#btnReload { right: calc(max(16px, env(safe-area-inset-right)) + 64px * var(--btn-scale)); bottom: calc(132px * var(--btn-scale)); }
-
+.tbtn svg { width: 82%; height: 82%; pointer-events: none; }
+.tbtn.big { width: calc(15vh * var(--btn-scale)); height: calc(15vh * var(--btn-scale)); border: 2px solid rgba(187,222,3,0.45); background: rgba(30, 40, 10, 0.12); }
+.tbtn.big svg { width: 55%; height: 55%; }
+.tbtn.pict { background: radial-gradient(circle, rgba(20,30,8,0.35) 40%, transparent 72%); }
+.tbtn.ghost { opacity: 1; filter: none; border-radius: 12px; }
+.tbtn.active { opacity: 1; transform: scale(0.92); }
+#btnJump { left: 76.5vw; top: 32vh; }
+#btnDash { left: 85.5vw; top: 27vh; }
+#btnMelee { left: 67.5vw; top: 44vh; }
+#btnFire { right: calc(max(3vw, env(safe-area-inset-right))); bottom: 9vh; }
+#btnGrenade { left: 57vw; top: 57vh; width: 15vh; height: 11vh; }
+#btnReload { left: 32vw; top: 56vh; width: 26vh; height: 13vh; }
 body.touch #crosshair i { width: 3px; height: 3px; }
 
 /* ---------- экраны ---------- */
@@ -200,20 +213,29 @@ body.touch #crosshair i { width: 3px; height: 3px; }
     <div id="marker"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 1 L23 12 L12 23 L1 12 Z" fill="#2a2016" stroke="#e8b840" stroke-width="2.5"/><path d="M12 7 L17 12 L12 17 L7 12 Z" fill="#e8b840"/></svg><span id="markerDist"></span></div>
     <div id="edgeArrow"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M16 3 L6 12 L16 21" fill="none" stroke="#2a1c0a" stroke-width="7" stroke-linejoin="miter"/><path d="M16 3 L6 12 L16 21" fill="none" stroke="#e8b840" stroke-width="4" stroke-linejoin="miter"/></svg></div>
 
-    <div id="bossbar" class="hidden"><div class="name">КОЛОСС</div><div class="bar"><div id="bossFill"></div></div></div>
+    <!-- Элитный враг: полоса здоровья и имя сверху -->
+    <div id="bossbar" class="hidden"><div class="bar"><div id="bossFill"></div><div id="bossLost"></div></div><div class="name" id="eliteName">КОЛОСС</div></div>
 
-    <!-- Нижняя панель: оружие, портрет героя, броня/здоровье, полоса-клинок -->
+    <!-- Патроны: лаймовая иконка оружия в скобках -->
+    <div id="ammoBox"><div class="bracket"><canvas id="weaponIcon" width="48" height="20"></canvas></div><div class="cnt"><div id="ammoText">30</div><div id="ammoRes">150</div></div></div>
+    <!-- Гранаты -->
+    <div id="grenBox"><span id="grenText">3</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="rgba(20,30,10,0.35)" stroke="#bbde03" stroke-width="1.5" stroke-opacity="0.6"/><circle cx="12" cy="13.5" r="5.5" fill="#bbde03"/><path d="M9.5 13.5h5M12 8.5v10M10 6.5h4v2h-4z" stroke="#2a3a06" stroke-width="1.2"/></svg></div>
+
+    <!-- Нижняя панель: портрет, броня/здоровье числами и двумя полосами -->
     <div id="bottom">
-      <div id="weaponBox"><canvas id="weaponIcon" width="48" height="20"></canvas><div id="ammoText"></div><div id="grenText"></div></div>
       <div id="portraitBox"><canvas id="portrait" width="40" height="40"></canvas></div>
       <div id="numbers"><div id="armorNum">0</div><div id="healthNum">100</div></div>
-      <svg id="blade" viewBox="0 0 130 34">
-        <defs><clipPath id="hpClip"><rect id="hpRect" x="0" y="0" width="130" height="34"/></clipPath></defs>
-        <polygon points="2,9 100,6 127,17 100,28 2,25" fill="#1a1010" fill-opacity="0.75"/>
-        <polygon points="4,11 99,8.5 122,17 99,25.5 4,23" fill="#ca2000" clip-path="url(#hpClip)"/>
-        <polygon points="4,11 99,8.5 122,17 99,12 4,14" fill="#ff5a3a" fill-opacity="0.55" clip-path="url(#hpClip)"/>
-        <polygon points="2,9 100,6 127,17 100,28 2,25" fill="none" stroke="#c89a3c" stroke-width="2"/>
-        <path d="M100 6 L100 28" stroke="#c89a3c" stroke-width="1.5"/>
+      <svg id="blade" viewBox="0 0 150 40">
+        <defs>
+          <clipPath id="hpClip"><rect id="hpRect" x="0" y="0" width="150" height="40"/></clipPath>
+          <clipPath id="arClip"><rect id="arRect" x="0" y="0" width="150" height="40"/></clipPath>
+        </defs>
+        <polygon points="1,8 118,8 148,20 118,32 1,32" fill="#14100e" fill-opacity="0.85" stroke="#3a3430" stroke-width="2"/>
+        <rect x="5" y="11" width="112" height="7" fill="#1830c8" clip-path="url(#arClip)"/>
+        <rect x="5" y="11" width="112" height="2" fill="#6a84ff" clip-path="url(#arClip)"/>
+        <polygon points="5,22 117,22 135,26 117,29 5,29" fill="#d01a10" clip-path="url(#hpClip)"/>
+        <rect x="5" y="22" width="112" height="2" fill="#ff6a50" clip-path="url(#hpClip)"/>
+        <path d="M118 8 L148 20 L118 32" fill="none" stroke="#7a6a50" stroke-width="2"/>
       </svg>
       <div id="dashPip"></div>
     </div>
@@ -223,12 +245,12 @@ body.touch #crosshair i { width: 3px; height: 3px; }
   <!-- Сенсорное управление: маленькие контурные кнопки по краям -->
   <div id="touch" class="hidden">
     <div id="stickBase"><div id="stickKnob"></div></div>
-    <div class="tbtn big" data-act="fire" id="btnFire"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6" stroke="currentColor" stroke-width="2"/></svg></div>
-    <div class="tbtn" data-act="jump" id="btnJump"><svg viewBox="0 0 24 24"><path d="M5 14 L12 6 L19 14 M5 20 L12 12 L19 20" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></div>
-    <div class="tbtn" data-act="dash" id="btnDash"><svg viewBox="0 0 24 24"><path d="M4 6 L11 12 L4 18 M12 6 L19 12 L12 18" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></div>
-    <div class="tbtn" data-act="melee" id="btnMelee"><svg viewBox="0 0 24 24"><path d="M4 20 L16 8 M14 4 L20 10 M6 14 L10 18" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15 5l1-1M17 7l1-1M19 9l1-1" stroke="currentColor" stroke-width="2"/></svg></div>
-    <div class="tbtn" data-act="grenade" id="btnGrenade"><svg viewBox="0 0 24 24"><circle cx="12" cy="14" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M10 7h4V4h-4z M15 5 L19 3" fill="none" stroke="currentColor" stroke-width="2"/></svg></div>
-    <div class="tbtn" data-act="reload" id="btnReload"><svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2-5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M18 3v5h-5" fill="none" stroke="currentColor" stroke-width="2.4"/></svg></div>
+    <div class="tbtn big" data-act="fire" id="btnFire"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="2.4"/></svg></div>
+    <div class="tbtn pict" data-act="jump" id="btnJump"><svg viewBox="0 0 24 24"><circle cx="13" cy="4" r="2.4" fill="currentColor"/><path d="M12 7l-4 4 3 2-2 6M12 7l3 4 4-1M11 13l5 1 1 5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"/><path d="M4 22h6" stroke="currentColor" stroke-width="1.6" opacity="0.6"/></svg></div>
+    <div class="tbtn pict" data-act="dash" id="btnDash"><svg viewBox="0 0 24 24"><circle cx="15" cy="5" r="2.4" fill="currentColor"/><path d="M14 8l-3 5 4 2-1 6M14 8l5 3M11 13l-5 2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"/><path d="M1 9h6M2 13h4M1 17h5" stroke="currentColor" stroke-width="1.6"/><path d="M19 4c3 3 3 9 0 13" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
+    <div class="tbtn pict" data-act="melee" id="btnMelee"><svg viewBox="0 0 24 24"><path d="M3 21l3-3M5 16l3 3M7 17L19 5l2-2-1 3L8 18" fill="currentColor" stroke="currentColor" stroke-width="1.6"/><path d="M9 13l1 1M11 11l1 1M13 9l1 1M15 7l1 1" stroke="#22300a" stroke-width="1.2"/></svg></div>
+    <div class="tbtn ghost" data-act="grenade" id="btnGrenade"></div>
+    <div class="tbtn ghost" data-act="reload" id="btnReload"></div>
   </div>
 
   <!-- Экраны: меню, пауза с настройками, смерть, завершение -->
@@ -762,9 +784,9 @@ function rock() {
     let v = 0.55 + facet + (fbm(n, x / 16, y / 16) - 0.5) * 0.35;
     if (edge < 1.6) v = 0.22;                    // трещина между гранями
     else if (edge < 3) v += 0.12;                 // светлая кромка
-    const c = mix(hex('#4a4656'), hex('#9a96a8'), clamp(v, 0, 1));
+    const c = mix(hex('#33281f'), hex('#86705c'), clamp(v, 0, 1));
     T.set(x, y, c[0], c[1], c[2]);
-    if (edge < 1.6 && y % 3 === 0 && R() < 0.5) T.set(x, y, 225, 232, 242); // снег в щелях
+    
   }
   for (let i = 0; i < 30; i++) { const x = R() * 128 | 0, y = R() * 128 | 0; T.set(x, y, 110, 130, 90); T.set(x + 1, y, 90, 110, 70); } // лишайник
   return T.done();
@@ -988,14 +1010,109 @@ function banner(friend) {
   return T.done();
 }
 
+
+// ======== Готический собор (по видео-эталону): плиты пола, резной камень, бронзовые контейнеры ========
+
+// Крупные плиты пола (256): серо-бежевый камень, тёмные швы, трещины, потёртости
+function flagstones(dark = false) {
+  const T = canvasRGBA(256, 256), R = rng(dark ? 41 : 40), n = noise2(dark ? 43 : 42);
+  const A = dark ? hex('#4c463f') : hex('#665a50'), B = dark ? hex('#8a7a68') : hex('#b0a292');
+  for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
+    const v = 0.5 + (fbm(n, x / 10, y / 10) - 0.5) * 0.45 + (fbm(n, x / 70 + 9, y / 70) - 0.5) * 0.4;
+    const c = mix(A, B, clamp(v, 0, 1));
+    T.set(x, y, c[0], c[1], c[2]);
+  }
+  // раскладка плит: ряды разной высоты, плиты разной ширины
+  const rows = [0, 72, 136, 200, 256];
+  for (let r = 0; r < 4; r++) {
+    const y0 = rows[r], y1 = rows[r + 1];
+    let x = (r * 53) % 64;
+    const xs = [];
+    while (x < 256 + 64) { xs.push(x); x += 70 + R() * 50 | 0; }
+    for (let i = 0; i < xs.length - 1; i++) {
+      const xa = xs[i], xb = xs[i + 1], tone = 0.86 + R() * 0.26;
+      for (let yy = y0; yy < y1; yy++) for (let xx = xa; xx < xb; xx++) {
+        const lx = xx - xa, ly = yy - y0;
+        if (ly < 3 || lx < 3) { T.set(xx, yy, 34, 30, 28); continue; }             // шов
+        if (ly === 3 || lx === 3) { T.shade(xx, yy, 1.25 * tone); continue; }      // светлая кромка
+        if (ly > y1 - y0 - 3 || lx > xb - xa - 3) { T.shade(xx, yy, 0.72 * tone); continue; }
+        T.shade(xx, yy, tone);
+      }
+      // трещина
+      if (R() < 0.45) { let cx = xa + 10 + R() * (xb - xa - 20), cy = y0 + 8; for (let k = 0; k < (y1 - y0) * 0.7; k++) { T.set(cx | 0, cy | 0, 40, 36, 32); cx += R() * 2 - 1; cy += 1; } }
+    }
+  }
+  for (let i = 0; i < 260; i++) T.shade(R() * 256 | 0, R() * 256 | 0, 0.8);   // выбоины
+  return T.done();
+}
+
+// Резной камень стен (128): ржаво-коричневый, стрельчатая ниша с черепом, колонки-каннелюры по бокам
+function gothicStone() {
+  const T = canvasRGBA(128, 128), R = rng(51), n = noise2(53);
+  for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+    const v = 0.5 + (fbm(n, x / 8, y / 8) - 0.5) * 0.5 + (fbm(n, x / 40, y / 40 + 5) - 0.5) * 0.35;
+    const c = mix(hex('#463830'), hex('#9a8268'), clamp(v, 0, 1));
+    T.set(x, y, c[0], c[1], c[2]);
+  }
+  // горизонтальные пояса-карнизы сверху и снизу
+  for (let x = 0; x < 128; x++) for (let t = 0; t < 10; t++) {
+    const k = t < 2 ? 1.35 : t < 7 ? 1.08 : 0.62;
+    T.shade(x, t, k); T.shade(x, 118 + t, t < 2 ? 1.3 : t < 6 ? 0.95 : 0.6);
+  }
+  // каннелюры (вертикальные желобки) по бокам
+  for (const x0 of [4, 112]) for (let y = 10; y < 118; y++) for (let i = 0; i < 12; i++) T.shade(x0 + i, y, i % 4 === 0 ? 0.6 : i % 4 === 1 ? 1.25 : 1);
+  // стрельчатая ниша (арка) в центре
+  const cx = 64, top = 18, bot = 112, hw = 34;
+  for (let y = top; y < bot; y++) for (let x = cx - hw; x <= cx + hw; x++) {
+    const dx = Math.abs(x - cx), dy = y - top;
+    const archH = 40, inArch = dy >= archH || Math.hypot(hw - dx + 14, archH - dy) < hw + 14 - 0;
+    if (!inArch) continue;
+    const inner = dy >= archH + 4 ? dx < hw - 5 : Math.hypot(hw - dx + 14, archH - dy) < hw + 8;
+    if (!inner) { T.shade(x, y, x < cx ? 1.4 : 0.75); continue; }   // рамка арки: свет слева, тень справа
+    T.shade(x, y, 0.55 + (dy / (bot - top)) * 0.15);                 // глубина ниши
+  }
+  // череп-рельеф в нише (свой простой рисунок)
+  const sx = 64, sy = 70;
+  for (let y = -12; y <= 12; y++) for (let x = -10; x <= 10; x++) {
+    const head = (x * x) / 100 + ((y + 2) * (y + 2)) / 110 < 1, jaw = y > 5 && Math.abs(x) < 6;
+    if (!head && !jaw) continue;
+    let k = 1.55 - (x + y) * 0.02;
+    if ((Math.hypot(x + 4, y + 1) < 3 || Math.hypot(x - 4, y + 1) < 3)) k = 0.45;   // глазницы
+    if (Math.abs(x) < 1.5 && y > 2 && y < 5) k = 0.6;                               // нос
+    if (y > 7 && x % 3 === 0) k = 0.7;                                              // зубы
+    T.shade(sx + x, sy + y, k);
+  }
+  // потёки и сколы
+  for (let i = 0; i < 8; i++) { const x = R() * 128 | 0, len = 10 + R() * 40; for (let y = 10; y < 10 + len; y++) T.shade(x, y, 0.85); }
+  for (let i = 0; i < 120; i++) T.shade(R() * 128 | 0, R() * 128 | 0, R() < 0.5 ? 0.75 : 1.2);
+  return T.done();
+}
+
+// Бронзово-зелёный контейнер (128): рамы, латунная окантовка, крест-накрест, круглая печать
+function container() {
+  const T = canvasRGBA(128, 128), R = rng(61), n = noise2(63);
+  for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
+    const v = 0.5 + (fbm(n, x / 9, y / 9) - 0.5) * 0.45;
+    const c = mix(hex('#1e2a24'), hex('#4e6250'), v);
+    T.set(x, y, c[0], c[1], c[2]);
+  }
+  const gold = (x, y, k = 1) => { const c = mix(hex('#6a4a1c'), hex('#d8a648'), k); T.set(x, y, c[0], c[1], c[2]); };
+  for (let i = 0; i < 128; i++) for (let t = 0; t < 7; t++) { const k = t < 2 ? 1 : t < 5 ? 0.6 : 0.3; gold(i, t, k); gold(t, i, k); gold(i, 127 - t, k * 0.8); gold(127 - t, i, k * 0.8); }
+  for (let i = 8; i < 120; i++) { gold(i, i, 0.5); gold(i + 1, i, 0.8); gold(127 - i, i, 0.5); gold(128 - i, i, 0.8); }  // крест-накрест
+  for (let a = 0; a < 6.28; a += 0.02) for (let r = 12; r < 17; r++) gold(64 + Math.cos(a) * r | 0, 64 + Math.sin(a) * r | 0, r < 14 ? 1 : 0.5);
+  for (let y = -6; y <= 6; y++) for (let x = -5; x <= 5; x++) if ((x * x) / 25 + (y * y) / 36 < 1) gold(64 + x, 64 + y, 0.4 + (5 - x) * 0.06);
+  for (let i = 0; i < 90; i++) T.shade(R() * 128 | 0, R() * 128 | 0, 0.7);
+  return T.done();
+}
+
 let cache = null;
 function envTextures() {
   if (cache) return cache;
   const tex = (c) => nearestTexture(c, true);
   cache = {
-    snow: tex(snow()), rock: tex(rock()), blocks: tex(blocks()), metal: tex(metal()),
-    sandbags: tex(sandbags()), bag: tex(bag()), crate: tex(crate()), barrel: tex(barrel()), gate: tex(gate()),
-    tiles: tex(tiles()), hull: tex(hull()), bannerFriend: tex(banner(true)), bannerEnemy: tex(banner(false)),
+    snow: tex(flagstones()), rock: tex(rock()), blocks: tex(gothicStone()), metal: tex(metal()),
+    sandbags: tex(sandbags()), bag: tex(bag()), crate: tex(container()), barrel: tex(barrel()), gate: tex(gate()),
+    tiles: tex(flagstones(true)), hull: tex(hull()), bannerFriend: tex(banner(true)), bannerEnemy: tex(banner(false)),
   };
   return cache;
 }
@@ -1690,9 +1807,12 @@ function fireFrames() {
 
 // ---------- Золотая метка-след (16×16, шеврон) ----------
 function footprint() {
-  const P = new Pix(16, 16);
-  P.fill(P.mask().poly([[2, 12], [8, 4], [14, 12], [11, 13], [8, 9], [5, 13]]), M.gold, { round: 2, contour: false, bias: 0.15 });
-  return P.outline([90, 60, 10]);
+  const P = new Pix(24, 24);
+  // золотая светящаяся плашка-ромб с тёмной бронзовой каймой (как метки пути в эталоне)
+  const gold = [hex('#7a4a0c'), hex('#c8861e'), hex('#f0b440'), hex('#ffd878'), hex('#fff2c4')];
+  P.fill(P.mask().poly([[12, 1], [23, 12], [12, 23], [1, 12]]), [hex('#1c120a'), hex('#2e1e10'), hex('#4a3016'), hex('#6a461e'), hex('#8a5e28')], { round: 2, contour: false });
+  P.fill(P.mask().poly([[12, 4], [20, 12], [12, 20], [4, 12]]), gold, { round: 3, contour: false, bias: 0.3, grad: 0.4 });
+  return P;
 }
 
 // ---------- Сгусток плазмы и огненный снаряд врага (16×16) ----------
@@ -1789,7 +1909,7 @@ const { nearestTexture, rng } = __m_pixel;
 
 
 
-const FOG_COLOR = 0xa9bcd6;
+const FOG_COLOR = 0x6e5a66;
 
 // Коробка, у которой UV растянуты по размеру (texScale метров на один повтор текстуры)
 function boxGeo(w, h, d, texScale) {
@@ -1877,9 +1997,10 @@ function buildLevel(scene, world) {
 
   // ---------------- Небо, туман, свет ----------------
   scene.background = new THREE.Color(FOG_COLOR);
-  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.02);
+  // крупный тёмный фон: шпили собора за стенами (подсвечены дымкой)
+  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.026);
   const skyGeo = new THREE.SphereGeometry(400, 32, 16);
-  const top = new THREE.Color(0x6f8db8), hor = new THREE.Color(FOG_COLOR), cols = [];
+  const top = new THREE.Color(0x2e2430), hor = new THREE.Color(FOG_COLOR), cols = [];
   const sp = skyGeo.attributes.position;
   for (let i = 0; i < sp.count; i++) {
     const t = Math.max(0, sp.getY(i) / 400);
@@ -1893,14 +2014,14 @@ function buildLevel(scene, world) {
   const sunHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, fog: false, depthWrite: false, transparent: true, opacity: 0.85 }));
   sunHalo.scale.set(140, 140, 1);
   sunHalo.position.set(150, 170, -260);
-  scene.add(sunHalo);
+  // пасмурное небо: светило не показываем
   const disc = new THREE.Mesh(new THREE.CircleGeometry(16, 32), new THREE.MeshBasicMaterial({ color: 0xfbf8ee, fog: false }));
   disc.position.copy(sunHalo.position);
   disc.lookAt(0, 0, 0);
-  scene.add(disc);
 
-  scene.add(new THREE.HemisphereLight(0xdfe9f7, 0x4a5262, 0.95));
-  const sun = new THREE.DirectionalLight(0xffe4bc, 1.5);
+
+  scene.add(new THREE.HemisphereLight(0xe2d0c0, 0x5a4030, 1.5));
+  const sun = new THREE.DirectionalLight(0xffd6a4, 1.3);
   sun.position.set(30, 50, -40);
   scene.add(sun);
 
@@ -1909,14 +2030,14 @@ function buildLevel(scene, world) {
   const ico = new THREE.IcosahedronGeometry(1, 1);
   for (let i = 0; i < 22; i++) {
     const a = (i / 22) * Math.PI * 2 + R() * 0.2, d = 150 + R() * 70;
-    const m = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x8a9cb8), 0.25 + R() * 0.2)));
+    const m = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x2a1e26), 0.35 + R() * 0.25)));
     const h = 40 + R() * 70;
     m.scale.set(30 + R() * 30, h, 30 + R() * 30);
     m.position.set(Math.cos(a) * d, h * 0.25, Math.sin(a) * d);
     m.rotation.y = R() * 3;
     scene.add(m);
     // снежные шапки
-    const capM = new THREE.Mesh(ico, hazeMat(new THREE.Color(0xdde6f2)));
+    const capM = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x34262e), 0.4)));
     capM.scale.set(m.scale.x * 0.45, h * 0.35, m.scale.z * 0.45);
     capM.position.set(m.position.x, m.position.y + h * 0.6, m.position.z);
     scene.add(capM);
@@ -1924,7 +2045,7 @@ function buildLevel(scene, world) {
   const cone4 = new THREE.ConeGeometry(1, 1, 4);
   for (let i = 0; i < 14; i++) {
     const a = (i / 14) * Math.PI * 2 + R() * 0.3, d = 70 + R() * 30;
-    const c = new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x5a6a86), 0.25 + R() * 0.15);
+    const c = new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x1e161c), 0.4 + R() * 0.25);
     const w = 3 + R() * 4, h = 14 + R() * 26;
     const tower = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), hazeMat(c));
     tower.position.set(Math.cos(a) * d, h / 2 - 2, Math.sin(a) * d);
@@ -1957,7 +2078,7 @@ function buildLevel(scene, world) {
   for (let z = -5; z <= 5; z += 2.5) if (R() < 0.8) block(PIT.minX - 0.2, z, 0.18, 0.18, 0, 0.6 + R() * 0.6, M.metal, { top: M.metal, collide: false, ray: false });
 
   // ---------------- Крепостные стены арены ----------------
-  const WH = 7, H = 20;
+  const WH = 10, H = 20;
   // стена вдоль оси с проёмами: holes [{a, b, y0, y1}]
   function wall(axis, fixed, from, to, holes = []) {
     const pieces = [[from, to, 0, WH]];
@@ -1996,10 +2117,10 @@ function buildLevel(scene, world) {
   }
   // угловые башни с шатровыми крышами
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    block(sx * (H + 1), sz * (H + 1), 4, 4, 0, 11, M.blocks, { texScale: 4 });
+    block(sx * (H + 1), sz * (H + 1), 4, 4, 0, 14, M.blocks, { texScale: 4 });
     const roof = new THREE.Mesh(cone4, M.slate);
     roof.scale.set(3.6, 5, 3.6);
-    roof.position.set(sx * (H + 1), 13.5, sz * (H + 1));
+    roof.position.set(sx * (H + 1), 16.5, sz * (H + 1));
     roof.rotation.y = Math.PI / 4;
     scene.add(roof);
   }
@@ -2065,7 +2186,7 @@ function buildLevel(scene, world) {
   const suv = slabGeo.attributes.uv;
   for (let i = 0; i < suv.count; i++) suv.setXY(i, suv.getX(i) / 2.4 + 0.5, suv.getY(i) / 2.4);
   function slab(x, z, rotY = 0) {
-    const m = new THREE.Mesh(slabGeo, M.metal);
+    const m = new THREE.Mesh(slabGeo, M.crate);
     m.position.set(x, 0, z);
     m.rotation.y = rotY;
     scene.add(m);
@@ -2074,7 +2195,7 @@ function buildLevel(scene, world) {
     world.box(x, z, vertical ? 0.6 : 2.6, vertical ? 2.6 : 0.6, 0, 2.0);
     contactShadow(x, z, 2.6, 0.6, 0, rotY);
     // снежный налёт на верхушке
-    const cap = new THREE.Mesh(boxGeo(1.75, 0.08, 0.56, 2), M.snow);
+    const cap = new THREE.Mesh(boxGeo(1.75, 0.08, 0.56, 2), M.metal);
     cap.position.set(x, 2.03, z);
     cap.rotation.y = rotY;
     scene.add(cap);
@@ -2610,7 +2731,7 @@ class Explosions {
 
 // ---------- Снегопад: пиксельные хлопья вокруг камеры ----------
 class Snowfall {
-  constructor(scene, count = 900) {
+  constructor(scene, count = 350) {
     this.count = count;
     this.pos = new Float32Array(count * 3);
     this.drift = new Float32Array(count);
@@ -2622,7 +2743,7 @@ class Snowfall {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
-    this.points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 2.5, sizeAttenuation: false, transparent: true, opacity: 0.85, depthWrite: false }));
+    this.points = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xc8a890, size: 2, sizeAttenuation: false, transparent: true, opacity: 0.45, depthWrite: false }));
     this.points.frustumCulled = false;
     scene.add(this.points);
   }
@@ -2630,7 +2751,7 @@ class Snowfall {
   update(dt, cam, time) {
     for (let i = 0; i < this.count; i++) {
       const k = i * 3;
-      this.pos[k + 1] -= dt * (1.2 + (i % 5) * 0.25);
+      this.pos[k + 1] -= dt * (0.4 + (i % 5) * 0.12); // медленно оседающий пепел
       this.pos[k] += Math.sin(time * 0.7 + this.drift[i]) * dt * 0.6 + dt * 0.5;
       // держим хлопья в кубе 50×20×50 вокруг камеры
       if (this.pos[k + 1] < cam.y - 4) this.pos[k + 1] += 20;
@@ -3136,6 +3257,8 @@ const M = {
   glove: ramp('#6f7a8c', { spread: 0.48 }),
   leather: ramp('#5e3c2a', { spread: 0.4 }),
   cyan: [hex('#0e2a3a'), hex('#14607e'), hex('#2cb4e6'), hex('#8af2ff'), hex('#eaffff')],
+  blueArmor: ramp('#2a4aa6', { spread: 0.5 }),
+  wood: ramp('#6a3a22', { spread: 0.45 }),
   heat: [hex('#3a0e06'), hex('#8e2208'), hex('#e05812'), hex('#ffac36'), hex('#fff2c6')],
 };
 const W = 192, H = 144;
@@ -3322,6 +3445,92 @@ function drawChainblade({ hilt = [146, 138], ang = -2.12, len = 176, teeth = 0, 
   return P.outline();
 }
 
+
+// ---------- Оружие в ракурсе "сзади-сбоку", низко справа (как в видео-эталоне) ----------
+// Виден задний торец (сталь, круглая крышка, прорезь прицела), верх и левый бок корпуса,
+// золотая плетёная лента и синий бронированный наруч. kind: rifle | shotgun | plasma | thermal
+function drawGunRear(kind, { glow = 0, casingOut = false } = {}) {
+  const P = new Pix(W, H);
+  // координаты задаём в "дизайн-сетке", затем ужимаем и прижимаем к низу кадра
+  const S = 0.82, OX = 45, OY = 26;
+  const T = (p) => [OX + p[0] * S, OY + p[1] * S];
+  const Q = (pts, r, o) => poly(P, pts.map(T), r, o);
+  const B = (cx, cy, rx, ry, r, o, rot = 0) => { const [x, y] = T([cx, cy]); blob(P, x, y, rx * S, ry * S, r, o, rot); };
+  const L = (a, b, r1, r, o) => { const [x1, y1] = T(a), [x2, y2] = T(b); P.fill(P.mask().limb(x1, y1, x2, y2, r1 * S), r, o); };
+  const R = (x, y, w, h, r, o) => Q([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], r, o);
+  const side = kind === 'shotgun' ? M.wood : kind === 'plasma' ? M.steel : M.casing;
+  const top = kind === 'plasma' ? M.iron : kind === 'thermal' ? M.steel : M.casing;
+  // синий бронированный наруч снизу слева (левая рука поддерживает цевьё)
+  Q([[-60, 190], [10, 118], [62, 112], [96, 190]], M.blueArmor, { round: 6, grad: 0.2 });
+  L([6, 124], [60, 116], 4, M.brass, { round: 2 });
+  for (let i = 0; i < 8; i++) B(12 + i * 7, 136 + (i % 2) * 2, 3.4, 2.6, M.brass, { round: 2, bias: i % 2 ? 0.2 : -0.1 }, 0.4);
+  // ствол и кожух у дальнего конца
+  if (kind === 'shotgun') {
+    for (const [bx, by] of [[20, 70], [26, 84]]) { B(bx, by, 10, 8, M.iron, { round: 3 }); B(bx - 2, by, 5, 4, [hex('#050506'), hex('#101014'), hex('#18181e'), hex('#22222a'), hex('#2c2c36')], { round: 1, contour: false }); }
+  } else if (kind === 'thermal') {
+    B(22, 78, 14, 20, M.iron, { round: 4 });
+    B(20, 78, 9, 13, M.heat, { round: 4, bias: glow - 0.2, contour: false });
+    B(18, 78, 4, 6, M.heat, { round: 2, bias: glow + 0.3, contour: false });
+  } else {
+    Q([[10, 62], [42, 58], [44, 98], [12, 96]], M.iron, { round: 3, tex: slits(4, 0.8) });
+    B(14, 78, 7, 10, M.iron, { round: 2, bias: -0.3 });
+    if (kind === 'plasma') B(14, 78, 4, 6, M.cyan, { round: 2, bias: 0.3 + glow, contour: false });
+    else B(13, 78, 3, 5, [hex('#050506'), hex('#101014'), hex('#18181e'), hex('#22222a'), hex('#2c2c36')], { round: 1, contour: false });
+  }
+  // длинный бок корпуса (к нам), уходит вдаль влево
+  Q([[36, 58], [112, 62], [116, 150], [40, 112]], side, { round: 6, grad: 0.15, bias: -0.3, rim: false, shine: 0, tex: kind === 'shotgun' ? (x, y) => (((x * 3 + y) % 9) === 0 ? -0.8 : 0) : null });
+  // нижняя накладка бока: тёмная сталь с прорезями
+  Q([[40, 100], [114, 120], [116, 150], [42, 116]], M.iron, { round: 3, tex: slits(5, 0.7) });
+  // верхняя грань
+  Q([[36, 58], [64, 50], [160, 54], [112, 62]], top, { round: 4, grad: -0.2, bias: 0 });
+  // планка на верхней грани
+  Q([[48, 55], [62, 52], [140, 55], [110, 59]], M.iron, { round: 2, tex: (x, y) => ((x + y) % 5 === 0 ? -1 : 0) });
+  // латунная окантовка граней и рамка панели
+  for (const [a, b] of [[[36, 58], [112, 62]], [[112, 62], [160, 54]], [[36, 58], [40, 112]], [[112, 62], [116, 150]], [[52, 70], [100, 72]], [[52, 70], [54, 102]]]) L(a, b, 1.6, M.brass, { round: 1 });
+  // детали бока
+  if (kind === 'rifle' || kind === 'thermal') { const [ex, ey] = T([78, 86]); emblem(P, ex, ey); }
+  if (kind === 'rifle') { B(102, 86, 7, 9, M.casing, { round: 3, bias: 0.2 }); B(102, 86, 3, 4, M.brass, { round: 1 }); }
+  if (kind === 'plasma') for (let i = 0; i < 4; i++) L([50 + i * 16, 72], [52 + i * 16, 104], 2.4, M.cyan, { round: 1, bias: glow, contour: false });
+  if (kind === 'thermal') { L([46, 66], [104, 70], 7, M.casing, { round: 4 }); for (const xx of [58, 92]) B(xx, 68, 4, 9, M.brass, { round: 2 }); }
+  // задний торец — массивный стальной блок с круглой крышкой и прицелом
+  Q([[112, 62], [160, 54], [166, 176], [116, 176]], M.iron, { round: 6, bias: -0.1 });
+  R(126, 40, 26, 20, M.steel, { round: 3, bias: 0.1 });           // прицельный блок сверху
+  R(131, 46, 16, 8, M.iron, { round: 1, bias: -0.4 });
+  B(118, 104, 16, 18, M.steel, { round: 6 });                     // круглая крышка на ребре
+  B(118, 104, 9, 10, M.iron, { round: 3, bias: 0.1 });
+  B(116, 101, 3, 3, M.steel, { round: 1, bias: 0.5 });
+  R(132, 112, 30, 34, M.steel, { round: 3, bias: -0.1 });
+  R(137, 118, 20, 22, M.iron, { round: 2, bias: -0.4 });
+  // висящие золотые шнуры у дальнего конца
+  for (let k = 0; k < 2; k++) for (let i = 0; i < 9; i++) {
+    const t = i / 8;
+    B(40 + k * 7 + Math.sin(t * 4 + k) * 2, 66 + t * 52, 2.6, 2.2, M.brass, { round: 2, bias: i % 2 ? 0.25 : -0.05 }, 0.3);
+  }
+  if (casingOut) {
+    L([30, 30], [38, 24], 3.4, M.brass, { round: 2 });               // гильзы летят влево-вверх
+    L([8, 46], [15, 42], 3, M.brass, { round: 2, bias: -0.2 });
+  }
+  return P.outline();
+}
+
+// "Подсвеченный" кадр: всё оружие залито тёплым светом вспышки (как в видео при выстреле)
+function litCanvas(c, color = '#ffc860') {
+  const o = document.createElement('canvas');
+  o.width = c.width; o.height = c.height;
+  const g = o.getContext('2d');
+  g.drawImage(c, 0, 0);
+  // умножаем на тёплый цвет вспышки и добавляем немного света — металл становится золотым
+  g.globalCompositeOperation = 'multiply';
+  g.fillStyle = color;
+  g.fillRect(0, 0, o.width, o.height);
+  g.globalCompositeOperation = 'lighter';
+  g.fillStyle = 'rgba(110,70,10,0.9)';
+  g.fillRect(0, 0, o.width, o.height);
+  g.globalCompositeOperation = 'destination-in';
+  g.drawImage(c, 0, 0);
+  return o;
+}
+
 // ---------- Бросок гранаты: рука с гранатой ----------
 function drawThrow() {
   const P = new Pix(W, H);
@@ -3360,13 +3569,11 @@ function weaponSprites() {
   const prevDither = Pix.dither;
   Pix.dither = 0.22; // на оружии тона ровнее, как в эталоне
   Pix.rim = true; Pix.shine = 0.5; // светлые кромки и блики на металле
-  const rifleIdle = drawRifle();
-  const shotIdle = drawShotgun();
   cache = {
-    rifle: { idle: rifleIdle, fire: drawRifle({ casingOut: true }), muzzle: [107, 2] },
-    shotgun: { idle: shotIdle, fire: shotIdle, reload: shotIdle.rotated(0.35, 110, 150, 0, 14), muzzle: [104, 6] },
-    plasma: { idle: drawPlasma({ glow: 0 }), idle2: drawPlasma({ glow: 0.25 }), fire: drawPlasma({ glow: 0.7 }), muzzle: [104, 4] },
-    thermal: { idle: drawThermal({ hot: 0 }), fire: drawThermal({ hot: 0.8 }), muzzle: [105, 22] },
+    rifle: { idle: drawGunRear('rifle'), fire: drawGunRear('rifle', { casingOut: true }), muzzle: [55, 90], side: true },
+    shotgun: { idle: drawGunRear('shotgun'), fire: drawGunRear('shotgun'), muzzle: [58, 84], side: true },
+    plasma: { idle: drawGunRear('plasma'), idle2: drawGunRear('plasma', { glow: 0.25 }), fire: drawGunRear('plasma', { glow: 0.7 }), muzzle: [55, 90], side: true },
+    thermal: { idle: drawGunRear('thermal'), fire: drawGunRear('thermal', { glow: 0.8 }), muzzle: [59, 90], side: true },
     chainblade: {
       idle: drawChainblade({ teeth: 0 }),
       idle2: drawChainblade({ teeth: 3 }),
@@ -3386,6 +3593,7 @@ function weaponSprites() {
     for (const [k, v] of Object.entries(w)) if (v instanceof Pix) w[k] = v.toCanvas();
   }
   cache.throwHand = cache.throwHand.toCanvas();
+  for (const k of ['rifle', 'shotgun', 'plasma', 'thermal']) cache[k].lit = litCanvas(cache[k].fire, k === 'plasma' ? '#a0e8ff' : k === 'thermal' ? '#ffa860' : '#ffc860');
   cache.flash = cache.flash.map((f) => f.toCanvas());
   cache.flashBlue = cache.flashBlue.toCanvas();
   Pix.dither = prevDither;
@@ -3913,20 +4121,23 @@ class Weapons {
     if (k === 'plasma') frame = this.flashT > 0 ? set.fire : Math.floor(time * 4) % 2 ? set.idle2 : set.idle;
     if (k === 'thermal' && this.beamOn) frame = set.fire;
     if (k === 'rifle' && this.recoil > 0.5) frame = set.fire;
-    if (k === 'shotgun' && this.reloadT > 0) frame = set.reload;
+    if (k === 'shotgun' && this.recoil > 0.5) frame = set.fire;
+    // при выстреле всё оружие залито тёплым светом вспышки
+    if (set.lit && (this.flashT > 0 || this.beamOn)) frame = set.lit;
 
     // смещения: покачивание, отдача, смена, перезарядка
     const bob = P.speed01 * (P.onGround ? 1 : 0.3);
-    let x = OW / 2 - 96 + 58 + Math.cos(P.bob) * 5 * bob;
-    let y = OH - 144 + 14 + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
+    // стрелковое оружие — низко справа (как в эталоне), клинок — по центру
+    const baseX = set.side ? Math.round(OW * 0.86) - 180 : OW / 2 - 96 + 58, baseY = set.side ? OH - 144 + 4 : OH - 144 + 14;
+    let x = baseX + Math.cos(P.bob) * 5 * bob;
+    let y = baseY + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
     y += this.switchT * 150;
     // лёгкий наклон: оружие держат по диагонали, ствол смотрит в центр экрана
-    let rot = k === 'chainblade' ? 0 : -0.13;
-    if (this.reloadT > 0 && k !== 'shotgun') {
+    let rot = 0;
+    if (this.reloadT > 0) {
       const p = 1 - this.reloadT / this.def.reload, s = Math.sin(p * Math.PI);
-      y += s * 46; rot = -0.13 - s * 0.35;
+      y += s * 46; rot = s * 0.3;
     }
-    if (k === 'shotgun' && this.reloadT > 0) y += Math.sin((1 - this.reloadT / this.def.reload) * Math.PI) * 18;
     // в прыжке оружие чуть "отстаёт"
     y += Math.max(-8, Math.min(10, P.vel.y * -0.8));
 
@@ -4272,6 +4483,7 @@ class Enemies {
     const G = this.G;
     e.hp -= amount;
     e.flashT = 0.08;
+    if (e.type === 'heavy' || e.type === 'boss') this.lastElite = e;
     const small = source === 'thermal';
     if (!small || Math.random() < 0.15) G.fx.bloodBurst(point, e.type === 'boss' ? 0.6 : 0.8, dir ? { x: dir.x * 2, y: 1, z: dir.z * 2 } : null);
     if (source === 'thermal' && Math.random() < 0.3) G.fx.sparks.burst(point, 3, 0xffa040, { speed: 2, life: 0.4, gravity: -2, size: 0.06 });
@@ -4906,10 +5118,10 @@ class Flow {
     this.G = G;
     // метки-следы: плоские шевроны на земле
     const tex = nearestTexture(miscArt().footprint);
-    const geo = new THREE.PlaneGeometry(0.55, 0.55).rotateX(-Math.PI / 2);
+    const geo = new THREE.PlaneGeometry(1.5, 1.1).rotateX(-Math.PI / 2);
     this.marks = [];
     for (let i = 0; i < 16; i++) {
-      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.3, depthWrite: false, fog: true }));
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, color: 0xffffff }));
       m.visible = false;
       G.scene.add(m);
       this.marks.push(m);
@@ -5046,15 +5258,15 @@ class Flow {
     const dx = t.x - P.x, dz = t.z - P.z, d = Math.hypot(dx, dz);
     if (d < 3) return;
     const nx = dx / d, nz = dz / d, yaw = Math.atan2(-nx, -nz);
-    const n = Math.min(this.marks.length, Math.floor((d - 2) / 1.3));
+    const n = Math.min(this.marks.length, Math.floor((d - 1.6) / 2.4));
     for (let i = 0; i < n; i++) {
-      const m = this.marks[i], s = 2 + i * 1.3;
+      const m = this.marks[i], s = 1.6 + i * 2.4;
       const x = P.x + nx * s + Math.sin(i * 1.7) * 0.15, z = P.z + nz * s + Math.cos(i * 1.3) * 0.15;
       const y = G.world.groundAt(x, z, P.y + 2, 0.1);
       if (y < -1) continue;
       m.position.set(x, y + 0.03, z);
       m.rotation.y = yaw;
-      m.material.opacity = 0.45 + 0.55 * Math.max(0, Math.sin(this.time * 4 - i * 0.6));
+      m.material.opacity = 0.8 + 0.2 * Math.max(0, Math.sin(this.time * 4 - i * 0.6));
       m.visible = true;
     }
   }
@@ -5107,7 +5319,7 @@ class Hud {
       hud: $('hud'), damage: $('damage'), hit: $('hitmarker'), obj: $('objective'), objText: $('objText'), objShort: $('objShort'),
       banner: $('banner'), pickup: $('pickupMsg'), marker: $('marker'), markerDist: $('markerDist'), arrow: $('edgeArrow'),
       bossbar: $('bossbar'), bossFill: $('bossFill'), armor: $('armorNum'), health: $('healthNum'), hpRect: $('hpRect'),
-      ammo: $('ammoText'), gren: $('grenText'), dash: $('dashPip'),
+      ammo: $('ammoText'), ammoRes: $('ammoRes'), gren: $('grenText'), dash: $('dashPip'), arRect: $('arRect'), bossLost: $('bossLost'), eliteName: $('eliteName'),
     };
     this.el.obj.style.backgroundImage = `url(${raggedBackground()})`;
     this.portrait = $('portrait').getContext('2d');
@@ -5169,12 +5381,14 @@ class Hud {
     const G = this.G, P = G.player, W = G.weapons, e = this.el;
     // задача: полоса гаснет, остаётся короткая строка
     this.objTimer -= dt;
-    this.set('objDim', this.objTimer <= 0, (v) => { e.obj.classList.toggle('dim', v); e.objShort.classList.toggle('show', v); });
+    // полоса задачи — только на несколько секунд; если сверху полоса элиты — прячем
+    const eliteOn = !e.bossbar.classList.contains('hidden');
+    this.set('objDim', this.objTimer <= 0 || eliteOn, (v) => { e.obj.classList.toggle('dim', v); });
 
     // броня, здоровье, клинок
     const hp = Math.ceil(P.health), ar = Math.ceil(P.armor);
-    this.set('hp', hp, (v) => { e.health.textContent = v; e.hpRect.setAttribute('width', String(Math.min(1, v / 100) * 124 + 2)); });
-    this.set('ar', ar, (v) => { e.armor.textContent = v; });
+    this.set('hp', hp, (v) => { e.health.textContent = v; e.hpRect.setAttribute('width', String(5 + Math.min(1, v / 100) * 130)); });
+    this.set('ar', ar, (v) => { e.armor.textContent = v; e.arRect.setAttribute('width', String(5 + Math.min(1, v / 100) * 112)); });
 
     // портрет: состояние по здоровью, вспышка боли, капли крови
     this.hurtT = (this.hurtT || 0) - dt;
@@ -5194,23 +5408,38 @@ class Hud {
 
     // оружие и патроны
     const w = WEAPONS[W.current], a = W.ammo[W.current];
-    this.set('wicon', W.current, (k) => { const c = this.weaponIcon; c.clearRect(0, 0, 48, 20); c.drawImage(this.art.icons[k], 0, 0); });
-    const ammoStr = w.mag ? `${Math.ceil(a.mag)}/${a.reserve}` : '∞';
-    this.set('ammo', ammoStr + (W.reloading ? '*' : ''), () => {
-      e.ammo.textContent = W.reloading ? 'перезарядка' : ammoStr;
+    // лаймовый силуэт иконки оружия
+    this.set('wicon', W.current, (k) => {
+      const c = this.weaponIcon;
+      c.clearRect(0, 0, 48, 20);
+      c.globalCompositeOperation = 'source-over';
+      c.drawImage(this.art.icons[k], 0, 0);
+      c.globalCompositeOperation = 'source-in';
+      c.fillStyle = '#bbde03';
+      c.fillRect(0, 0, 48, 20);
+      c.globalCompositeOperation = 'source-over';
+    });
+    const magStr = w.mag ? String(Math.ceil(a.mag)) : '∞';
+    this.set('ammo', magStr + '|' + (w.mag ? a.reserve : '') + (W.reloading ? '*' : ''), () => {
+      e.ammo.textContent = W.reloading ? '…' : magStr;
+      e.ammoRes.textContent = w.mag ? a.reserve : '';
       e.ammo.classList.toggle('low', !!w.mag && a.mag <= w.mag * 0.25);
     });
-    this.set('gren', W.grenades, (v) => { e.gren.textContent = `гранаты ${v}`; });
+    this.set('gren', W.grenades, (v) => { e.gren.textContent = v; });
     this.set('dash', Math.round((1 - P.dashCd / DASH_COOLDOWN) * 20), (v) => { e.dash.style.transform = `translateX(-50%) scaleX(${v / 20})`; e.dash.style.opacity = v >= 20 ? 0.85 : 0.35; });
 
     // красная вспышка урона + постоянная при низком здоровье
     const low = hp < 30 ? 0.3 + Math.sin(performance.now() / 220) * 0.1 : 0;
     this.set('dmg', Math.round(Math.max(P.hurtFlash * 0.9, low) * 40) / 40, (v) => { e.damage.style.opacity = v; });
 
-    // босс
-    const boss = G.enemies.boss;
-    const bh = boss && !boss.dead && boss.active ? Math.round((boss.hp / boss.maxHp) * 200) : -1;
-    this.set('boss', bh, (v) => { e.bossbar.classList.toggle('hidden', v < 0); if (v >= 0) e.bossFill.style.transform = `scaleX(${v / 200})`; });
+    // элитный враг (босс или последний раненый тяжёлый демон): полоса и имя сверху
+    const el = G.enemies.boss && !G.enemies.boss.dead ? G.enemies.boss : G.enemies.lastElite && !G.enemies.lastElite.dead ? G.enemies.lastElite : null;
+    const bh = el && el.active ? Math.round((el.hp / el.maxHp) * 200) : -1;
+    this.set('boss', bh, (v) => {
+      e.bossbar.classList.toggle('hidden', v < 0);
+      if (v >= 0) { e.bossFill.style.transform = `scaleX(${v / 200})`; e.bossLost.style.transform = `scaleX(${v / 200})`; }
+    });
+    this.set('eliteName', el ? el.type : '', (t) => { e.eliteName.textContent = t === 'boss' ? 'Колосс' : t === 'heavy' ? 'Тяжёлый демон' : ''; });
 
     this.updateMarker();
   }
