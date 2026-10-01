@@ -1,0 +1,50 @@
+{
+ "name": "gunner",
+ "cell": [
+  112,
+  128
+ ],
+ "rows": 17,
+ "cols": 36,
+ "gridRows": 4,
+ "anims": {
+  "idle": {
+   "row": 0,
+   "frames": 2,
+   "dirs": 8,
+   "fps": 3,
+   "loop": true
+  },
+  "walk": {
+   "row": 2,
+   "frames": 6,
+   "dirs": 8,
+   "fps": 9,
+   "loop": true
+  },
+  "attack": {
+   "row": 8,
+   "frames": 3,
+   "dirs": 8,
+   "fps": 10,
+   "loop": false
+  },
+  "hit": {
+   "row": 11,
+   "frames": 1,
+   "dirs": 8,
+   "fps": 10,
+   "loop": false
+  },
+  "death": {
+   "row": 12,
+   "frames": 5,
+   "dirs": 8,
+   "fps": 9,
+   "loop": false
+  }
+ },
+ "pxWorld": 0.016796875,
+ "footPx": 123,
+ "palette": 22
+}

@@ -12,6 +12,7 @@ import { Pickups } from './pickups.js';
 import { Flow } from './flow.js';
 import { Hud } from './hud.js';
 import { initAudio, sfx, audioSettings, music } from './audio.js';
+import { loadSprites } from './sprites.js';
 
 // Шрифты грузим из скрипта, чтобы они не задерживали старт (нет сети — останутся системные)
 const fontLink = document.createElement('link');
@@ -45,6 +46,8 @@ const overlay = document.getElementById('overlay');
 
 // ---------- Общий контекст игры ----------
 const G = { scene, camera, isTouch, settings };
+// запечённые атласы врагов (3D → 8 ракурсов → пиксели) — до постройки уровня и врагов
+await loadSprites(['fanatic', 'gunner', 'heavy', 'boss', 'w_rifle', 'w_shotgun', 'w_plasma', 'w_thermal', 'w_chainblade', 'w_throw']);
 G.world = new World();
 G.level = buildLevel(scene, G.world);
 G.fx = createFX(scene);
@@ -236,8 +239,8 @@ function resize() {
   camera.userData.baseFov = w < h ? 92 : 76;
   camera.updateProjectionMatrix();
   // пиксельный слой: ~280 "пикселей" по высоте → оружие занимает ~45% кадра, пиксели крупные и чёткие
-  overlay.height = 220;
-  overlay.width = Math.round((220 * w) / h);
+  overlay.height = 256;
+  overlay.width = Math.round((256 * w) / h);
   G.fx.setScale(h * renderer.getPixelRatio());
 }
 window.addEventListener('resize', resize);

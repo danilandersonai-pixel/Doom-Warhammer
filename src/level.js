@@ -2,7 +2,7 @@
 // Окружение — 3D с детальными пиксельными текстурами; трупы, огонь и знамёна — спрайты.
 import * as THREE from 'three';
 import { envTextures } from './textures.js';
-import { enemySheet } from './art_chars.js';
+import { SPRITES, spriteTexture, setSpriteFrame, spriteGeometry } from './sprites.js';
 import { miscArt, haloCanvas } from './art_misc.js';
 import { nearestTexture, rng } from './pixel.js';
 
@@ -418,15 +418,9 @@ export function buildLevel(scene, world) {
   };
   // трупы — последние кадры смерти из листов врагов
   const corpseSprite = (type, x, z, flip) => {
-    const sh = enemySheet(type);
-    const tex = nearestTexture(sh.canvas);
-    tex.repeat.set(1 / sh.count, 1);
-    tex.offset.x = sh.death[3] / sh.count;
-    if (flip) { tex.repeat.x *= -1; tex.offset.x += 1 / sh.count; }
-    const px = type === 'heavy' ? 0.024 : 0.021;
-    const g = new THREE.PlaneGeometry(sh.w * px, sh.h * px);
-    g.translate(0, (sh.h * px) / 2, 0);
-    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, emissive: 0x302828, emissiveMap: tex }));
+    const sh = SPRITES[type], tex = spriteTexture(sh);
+    setSpriteFrame(tex, sh, 'death', sh.meta.anims.death.frames - 1, flip ? 2 : 6);
+    const m = new THREE.Mesh(spriteGeometry(sh), new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, emissive: 0x302828, emissiveMap: tex }));
     m.position.set(x, -0.02, z);
     scene.add(m);
     staticDecal(x, z, 2.2);

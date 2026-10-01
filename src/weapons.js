@@ -1,7 +1,9 @@
 // Оружие игрока: 5 видов + гранаты. Логика стрельбы и анимация спрайта в руках.
-// Спрайт рисуется на 2D-холсте поверх 3D (низкое разрешение → крупные чёткие пиксели).
+// Кадры запечены из 3D-модели рук и оружия (tools/bake_sprites.mjs) и рисуются на 2D-холсте поверх 3D
+// (логическое разрешение 256 px по высоте → крупные чёткие пиксели).
 import * as THREE from 'three';
 import { weaponSprites } from './art_weapons.js';
+import { SPRITES } from './sprites.js';
 import { sfx } from './audio.js';
 import { miscArt } from './art_misc.js';
 
@@ -21,7 +23,13 @@ export class Weapons {
     this.G = G;
     this.overlay = overlay;
     this.ctx = overlay.getContext('2d');
-    this.spr = weaponSprites();
+    this.spr = weaponSprites();   // процедурные вспышки выстрела
+    this.sheets = {};
+    for (const k of [...Object.keys(WEAPONS), 'throw']) this.sheets[k] = SPRITES['w_' + k];
+    this.tint = document.createElement('canvas');
+    this.tint.width = 384; this.tint.height = 256;
+    this.tintG = this.tint.getContext('2d');
+    this.shotAge = 9;
     this.ray = new THREE.Raycaster();
     this.tmp = new THREE.Vector3();
     this.dir = new THREE.Vector3();
@@ -94,6 +102,7 @@ export class Weapons {
     const G = this.G, P = G.player;
     this.cooldown -= dt;
     this.flashT -= dt;
+    this.shotAge += dt;
     this.recoil *= Math.exp(-14 * dt);
     this.teeth += dt * 60;
 
@@ -184,6 +193,7 @@ export class Weapons {
     this.semiLatch = true;
     this.recoil = 1;
     this.flashT = 0.06;
+    this.shotAge = 0;
     G.player.kick += w.kick;
     G.player.addTrauma(w.shake);
     const muzzle = this.muzzleWorld();
@@ -268,7 +278,14 @@ export class Weapons {
     }
   }
 
-  // ---------- Рисование спрайта оружия на оверлее ----------
+  // ---------- Рисование кадра оружия на оверлее ----------
+  // Кадр — часть виртуального экрана 560×256 (см. jobs.mjs: view.x), центрируем его по ширине оверлея.
+  frameOf(sheet, anim, f) {
+    const m = sheet.meta, A = m.anims[anim] || m.anims.idle;
+    const i = A.start + Math.max(0, Math.min(A.frames - 1, f | 0));
+    return [(i % m.cols) * m.cell[0], Math.floor(i / m.cols) * m.cell[1]];
+  }
+
   draw(dt, time) {
     const c = this.overlay, g = this.ctx, P = this.G.player;
     const OH = c.height, OW = c.width;
@@ -276,70 +293,59 @@ export class Weapons {
     g.imageSmoothingEnabled = false;
     if (P.dead) return;
 
-    const k = this.current, set = this.spr[k];
-    let frame = set.idle;
-    if (k === 'chainblade') frame = Math.floor(this.teeth / 3) % 2 ? set.idle2 : set.idle;
-    if (k === 'plasma') frame = this.flashT > 0 ? set.fire : Math.floor(time * 4) % 2 ? set.idle2 : set.idle;
-    if (k === 'thermal' && this.beamOn) frame = set.fire;
-    if (k === 'rifle' && this.recoil > 0.5) frame = set.fire;
-    if (k === 'shotgun' && this.recoil > 0.5) frame = set.fire;
-    // при выстреле всё оружие залито тёплым светом вспышки
-    if (set.lit && (this.flashT > 0 || this.beamOn)) frame = set.lit;
-
-    // смещения: покачивание, отдача, смена, перезарядка
-    const bob = P.speed01 * (P.onGround ? 1 : 0.3);
-    // стрелковое оружие — низко справа (как в эталоне), клинок — по центру
-    const baseX = set.side ? Math.round(OW * 0.86) - 180 : OW / 2 - 96 + 58, baseY = set.side ? OH - 144 + 4 : OH - 144 + 14;
-    let x = baseX + Math.cos(P.bob) * 5 * bob;
-    let y = baseY + Math.abs(Math.sin(P.bob)) * 5 * bob + this.recoil * 9 + Math.sin(time * 1.7) * 1.2;
-    y += this.switchT * 150;
-    // лёгкий наклон: оружие держат по диагонали, ствол смотрит в центр экрана
-    let rot = 0;
-    if (this.reloadT > 0) {
-      const p = 1 - this.reloadT / this.def.reload, s = Math.sin(p * Math.PI);
-      y += s * 46; rot = s * 0.3;
-    }
-    // в прыжке оружие чуть "отстаёт"
-    y += Math.max(-8, Math.min(10, P.vel.y * -0.8));
-
-    // удар клинком (собственный или быстрый) заменяет кадр
+    const k = this.current;
+    let sheet = this.sheets[k], anim = 'idle', f = 0;
+    const A = (n) => sheet.meta.anims[n];
+    f = Math.floor(time * A('idle').fps) % A('idle').frames;
+    if (k === 'chainblade') f = Math.floor(this.teeth / 4) % 3;
+    const fireA = A('fire');
+    if (fireA && this.shotAge < fireA.frames / fireA.fps) { anim = 'fire'; f = this.shotAge * fireA.fps; }
+    if (k === 'thermal' && this.beamOn) { anim = 'fire'; f = Math.floor(time * 20) % 2; }
+    if (this.reloadT > 0 && A('reload')) { anim = 'reload'; f = (1 - this.reloadT / this.def.reload) * A('reload').frames; }
+    if (this.switchT > 0.01) { anim = 'raise'; f = (1 - this.switchT) * (A('raise').frames - 1); }
     if (this.swingT >= 0) {
-      let t = this.swingT, name = null;
-      for (const [n, d] of SWING) { if (t < d) { name = n; break; } t -= d; }
-      frame = this.spr.chainblade[name || 'idle'];
-      if (!name) y += (this.swingT - 0.28) * 300;
-      if (k !== 'chainblade' && !name) frame = null;
-      x = OW / 2 - 96 + 58; rot = 0;
-      if (k !== 'chainblade') y = OH - 144 + 14;
+      sheet = this.sheets.chainblade; anim = 'swing';
+      const total = SWING.reduce((s2, x) => s2 + x[1], 0) + 0.12;
+      f = (this.swingT / total) * sheet.meta.anims.swing.frames;
     }
-    if (this.throwT > 0) { frame = this.spr.throwHand; x = OW / 2 - 96 + 60; y = OH - 144 + 14 + (0.35 - this.throwT) * -40; rot = 0; }
+    if (this.throwT > 0) { sheet = this.sheets.throw; anim = 'throw'; f = ((0.35 - this.throwT) / 0.35) * 5; }
 
-    if (frame) {
-      g.save();
-      g.translate(Math.round(x + 96), Math.round(y + 144));
-      if (rot) g.rotate(rot);
-      g.drawImage(frame, -96, -144);
-      g.restore();
-    }
+    const [cw, ch] = sheet.meta.cell, viewX = sheet === this.sheets.throw ? 0 : sheet === this.sheets.chainblade ? 120 : 176;
+    // покачивание при ходьбе, отставание в прыжке, лёгкое «дыхание»
+    const bob = P.speed01 * (P.onGround ? 1 : 0.3);
+    const x = Math.round((OW - 560) / 2 + viewX + Math.cos(P.bob) * 6 * bob);
+    const y = Math.round(OH - ch + 4 + Math.abs(Math.sin(P.bob)) * 6 * bob + Math.sin(time * 1.7) * 1.2 + Math.max(-8, Math.min(10, P.vel.y * -0.8)));
+    const [sx, sy] = this.frameOf(sheet, anim, f);
+    const flashLit = (this.flashT > 0 || this.beamOn) && this.swingT < 0 && !this.def.melee;
+    if (flashLit) {
+      // при выстреле оружие подсвечено вспышкой: умножаем на тёплый цвет и добавляем свет
+      const t = this.tintG;
+      t.globalCompositeOperation = 'copy';
+      t.drawImage(sheet.img, sx, sy, cw, ch, 0, 0, cw, ch);
+      t.globalCompositeOperation = 'source-atop';
+      t.fillStyle = k === 'plasma' ? 'rgba(120,210,255,0.28)' : k === 'thermal' ? 'rgba(255,130,50,0.3)' : 'rgba(255,200,110,0.32)';
+      t.fillRect(0, 0, cw, ch);
+      g.drawImage(this.tint, x, y);
+    } else g.drawImage(sheet.img, sx, sy, cw, ch, x, y, cw, ch);
 
-    // вспышка выстрела (аддитивно): лучи + ореол
-    if (this.flashT > 0 && frame && this.swingT < 0 && !this.def.melee) {
-      const [mx, my] = set.muzzle;
-      const fx = Math.round(x + mx), fy = Math.round(y + my);
+    // вспышка выстрела (аддитивно): лучи + ореол у дула
+    if (this.flashT > 0 && this.swingT < 0 && !this.def.melee && sheet.meta.muzzle) {
+      const [mx, my] = sheet.meta.muzzle;
+      const fx = Math.round(x + mx * cw), fy = Math.round(y + my * ch);
       g.save();
       g.globalCompositeOperation = 'lighter';
       const blue = k === 'plasma';
-      const halo = g.createRadialGradient(fx, fy, 0, fx, fy, 60);
+      const halo = g.createRadialGradient(fx, fy, 0, fx, fy, 70);
       halo.addColorStop(0, blue ? 'rgba(140,220,255,0.7)' : k === 'thermal' ? 'rgba(255,140,60,0.6)' : 'rgba(255,190,90,0.7)');
       halo.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = halo;
-      g.fillRect(fx - 60, fy - 60, 120, 120);
+      g.fillRect(fx - 70, fy - 70, 140, 140);
       if (k !== 'thermal') {
         const fl = blue ? this.spr.flashBlue : this.spr.flash[Math.floor(time * 60) % 2];
-        const s = k === 'shotgun' ? 1.3 : 1;
-        g.translate(fx, fy - 6);
+        const s2 = k === 'shotgun' ? 1.4 : 1.1;
+        g.translate(fx, fy);
         g.rotate((Math.floor(Math.random() * 4) * Math.PI) / 4);
-        g.drawImage(fl, -40 * s, -40 * s, 80 * s, 80 * s);
+        g.drawImage(fl, -40 * s2, -40 * s2, 80 * s2, 80 * s2);
       }
       g.restore();
     }

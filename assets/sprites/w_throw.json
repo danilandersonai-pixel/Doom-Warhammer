@@ -1,0 +1,22 @@
+{
+ "name": "w_throw",
+ "cell": [
+  384,
+  256
+ ],
+ "frames": 5,
+ "cols": 5,
+ "gridRows": 1,
+ "anims": {
+  "throw": {
+   "start": 0,
+   "frames": 5,
+   "dirs": 1,
+   "fps": 14,
+   "loop": false
+  }
+ },
+ "pxWorld": 0,
+ "footPx": 256,
+ "palette": 24
+}

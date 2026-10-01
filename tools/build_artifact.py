@@ -60,7 +60,7 @@ chunks = ["import * as THREE from 'three';"]
 for p in order:
     _, body, exports = parsed[p]
     ret = f"return {{ {', '.join(exports)} }};" if exports else ''
-    chunks.append(f"// ===== {p.name} =====\nconst {mod_id(p)} = (() => {{\n{body}\n{ret}\n}})();")
+    chunks.append(f"// ===== {p.name} =====\nconst {mod_id(p)} = await (async () => {{\n{body}\n{ret}\n}})();")
 
 html = (root / 'index.html').read_text()
 body = html[html.index('<body>') + 6: html.index('</body>')]

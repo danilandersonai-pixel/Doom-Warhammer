@@ -1,0 +1,57 @@
+{
+ "name": "heavy",
+ "cell": [
+  160,
+  176
+ ],
+ "rows": 21,
+ "cols": 25,
+ "gridRows": 7,
+ "anims": {
+  "idle": {
+   "row": 0,
+   "frames": 2,
+   "dirs": 8,
+   "fps": 3,
+   "loop": true
+  },
+  "walk": {
+   "row": 2,
+   "frames": 6,
+   "dirs": 8,
+   "fps": 8,
+   "loop": true
+  },
+  "run": {
+   "row": 8,
+   "frames": 4,
+   "dirs": 8,
+   "fps": 12,
+   "loop": true
+  },
+  "attack": {
+   "row": 12,
+   "frames": 3,
+   "dirs": 8,
+   "fps": 9,
+   "loop": false
+  },
+  "hit": {
+   "row": 15,
+   "frames": 1,
+   "dirs": 8,
+   "fps": 10,
+   "loop": false
+  },
+  "death": {
+   "row": 16,
+   "frames": 5,
+   "dirs": 8,
+   "fps": 9,
+   "loop": false
+  }
+ },
+ "pxWorld": 0.017613636363636363,
+ "footPx": 170,
+ "palette": 24
+}

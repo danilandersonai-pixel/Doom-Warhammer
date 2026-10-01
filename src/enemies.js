@@ -1,15 +1,15 @@
 // Враги: фанатик (бегун), стрелок, тяжёлый демон (рывок), босс «Колосс» с тремя фазами.
-// Каждый — пиксельный спрайт-билборд (лист кадров из art_chars.js), невидимый хитбокс и тень.
+// Каждый — спрайт-билборд из запечённого атласа (3D-модель → 8 ракурсов → пиксели, tools/bake_sprites.mjs):
+// кадр выбирается по анимации и по углу между взглядом врага и камерой, как в Doom. Плюс невидимый хитбокс и тень.
 import * as THREE from 'three';
-import { enemySheet } from './art_chars.js';
-import { nearestTexture } from './pixel.js';
+import { SPRITES, spriteTexture, setSpriteFrame, viewDir, spriteGeometry } from './sprites.js';
 import { sfx } from './audio.js';
 
 export const TYPES = {
-  fanatic: { hp: 55, speed: 7.4, radius: 0.42, height: 1.85, px: 0.022, dmg: 9, range: 1.7, windup: 0.26, cooldown: 0.75, walkFps: 11 },
-  gunner: { hp: 70, speed: 3.6, radius: 0.42, height: 1.85, px: 0.022, fireDelay: 1.9, burst: 3, bulletDmg: 6, keepMin: 7, keepMax: 16, walkFps: 7, muzzle: [0.42, 1.12] },
-  heavy: { hp: 420, speed: 2.5, radius: 0.85, height: 2.8, px: 0.024, dmg: 26, range: 2.7, windup: 0.42, cooldown: 1.3, walkFps: 6 },
-  boss: { hp: 2000, speed: 2.7, radius: 1.6, height: 6.0, px: 0.034, dmg: 32, range: 4.2, windup: 0.55, cooldown: 1.6, walkFps: 5, muzzle: [-2.07, 2.2] },
+  fanatic: { hp: 55, speed: 7.4, radius: 0.42, height: 1.85, dmg: 9, range: 1.7, windup: 0.26, cooldown: 0.75, walkFps: 13 },
+  gunner: { hp: 70, speed: 3.6, radius: 0.42, height: 1.85, fireDelay: 1.9, burst: 3, bulletDmg: 6, keepMin: 7, keepMax: 16, walkFps: 9, muzzle: [0.85, -0.3, 1.2] },
+  heavy: { hp: 420, speed: 2.5, radius: 0.85, height: 2.8, dmg: 26, range: 2.7, windup: 0.42, cooldown: 1.3, walkFps: 8 },
+  boss: { hp: 2000, speed: 2.7, radius: 1.6, height: 6.0, dmg: 32, range: 4.2, windup: 0.55, cooldown: 1.6, walkFps: 7, muzzle: [2.4, 1.3, 3.2] },
 };
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -25,7 +25,7 @@ export class Enemies {
     this.list = [];
     this.corpses = [];
     this.sheets = {};
-    for (const t of Object.keys(TYPES)) this.sheets[t] = enemySheet(t);
+    for (const t of Object.keys(TYPES)) this.sheets[t] = SPRITES[t];
     this.tmp = new THREE.Vector3();
     this.camRight = new THREE.Vector3();
     this.ray = new THREE.Raycaster();
@@ -38,13 +38,9 @@ export class Enemies {
 
   spawn(type, x, y, z, { silent = false } = {}) {
     const t = TYPES[type], sh = this.sheets[type];
-    const map = nearestTexture(sh.canvas);
-    map.repeat.set(1 / sh.count, 1);
+    const map = spriteTexture(sh);
     const mat = new THREE.MeshLambertMaterial({ map, emissiveMap: map, emissive: 0x3a3434, alphaTest: 0.5, side: THREE.DoubleSide });
-    const w = sh.w * t.px, h = sh.h * t.px;
-    const geo = new THREE.PlaneGeometry(w, h);
-    geo.translate(0, h / 2 - 3 * t.px, 0);
-    const sprite = new THREE.Mesh(geo, mat);
+    const sprite = new THREE.Mesh(spriteGeometry(sh), mat);
     const group = new THREE.Group();
     group.add(sprite);
     const hitbox = new THREE.Mesh(BOX, HIDDEN);
@@ -64,7 +60,7 @@ export class Enemies {
       dead: false, active: false, spawnT: 0, flashT: 0, painT: 0, stunT: 0,
       state: 'chase', stateT: 0, cooldown: 0.6 + Math.random() * 0.6, fireT: 1 + Math.random() * 1.5, burst: 0,
       walk: Math.random() * 4, moving: false, strafe: Math.random() < 0.5 ? -1 : 1, strafeT: 1 + Math.random() * 2,
-      avoid: 0, avoidT: 0, kb: { x: 0, z: 0 }, chargeDir: null, deathT: 0, flip: Math.random() < 0.5,
+      avoid: 0, avoidT: 0, kb: { x: 0, z: 0 }, chargeDir: null, deathT: 0, yaw: Math.random() * 6.28, dir: 0,
       cryT: 2 + Math.random() * 4, phase: 1, summonT: 10, spiralT: 6, attackKind: null, frame: 0,
     };
     hitbox.userData.enemy = e;
@@ -244,12 +240,18 @@ export class Enemies {
         e.stuckT = 0; e.lastX = e.pos.x; e.lastZ = e.pos.z;
       }
       if (e.escapeT > 0 && move) { e.escapeT -= dt; move = e.escape; }
+      // куда смотрит: по ходу движения, в бою и на месте — на игрока
+      let face = Math.atan2(pdx, pdz);
       if (move) {
         const d = e.state === 'charge' ? move : this.steer(e, move.x, move.z, dt);
         e.pos.x += d.x * speed * dt;
         e.pos.z += d.z * speed * dt;
         e.walk += dt * e.t.walkFps * (speed / e.t.speed);
+        if (e.type !== 'gunner' && e.type !== 'boss') face = Math.atan2(d.x, d.z);
       }
+      let da = face - e.yaw;
+      da = Math.atan2(Math.sin(da), Math.cos(da));
+      e.yaw += da * (1 - Math.exp(-(e.type === 'boss' ? 4 : 10) * dt));
       e.pos.x += e.kb.x * dt; e.pos.z += e.kb.z * dt;
       const damp = Math.exp(-7 * dt);
       e.kb.x *= damp; e.kb.z *= damp;
@@ -437,10 +439,10 @@ export class Enemies {
     return { move: { x: -nz * e.strafe * 0.8 + nx * 0.3, z: nx * e.strafe * 0.8 + nz * 0.3 }, speed: speed * 0.8 };
   }
 
-  // Точка дула в мире: смещение спрайта вправо (вдоль камеры) и вверх
+  // Точка дула в мире: вперёд по взгляду врага, вбок (+ влево от него) и вверх
   muzzlePos(e) {
-    const [side, up] = e.t.muzzle;
-    return new THREE.Vector3(e.pos.x + this.camRight.x * side, e.pos.y + up, e.pos.z + this.camRight.z * side);
+    const [fwd, side, up] = e.t.muzzle, sy = Math.sin(e.yaw), cy = Math.cos(e.yaw);
+    return new THREE.Vector3(e.pos.x + sy * fwd + cy * side, e.pos.y + up, e.pos.z + cy * fwd - sy * side);
   }
 
   separate(P) {
@@ -468,39 +470,36 @@ export class Enemies {
     }
   }
 
-  // Выбор кадра анимации
+  // Выбор кадра: анимация + номер кадра, направление — по углу к камере
   animate(e, time) {
-    const sh = e.sheet;
-    let f = sh.walk[Math.floor(e.walk) % 4];
-    if (!e.moving) f = sh.walk[0];
-    if (e.type === 'fanatic' && e.state === 'attack') f = e.stateT < e.t.windup * 0.7 ? sh.attack[0] : sh.attack[1];
+    const cam = this.G.camera;
+    e.dir = viewDir(e.yaw, e.pos.x, e.pos.z, cam.position.x, cam.position.z);
+    const A = e.sheet.meta.anims;
+    let anim = 'idle', f = Math.floor(time * A.idle.fps + e.walk) % A.idle.frames;
+    if (e.moving) { anim = 'walk'; f = Math.floor(e.walk) % A.walk.frames; }
+    const wind = (k) => Math.min(2, Math.floor((e.stateT / e.t.windup) * k));
+    if (e.type === 'fanatic' && e.state === 'attack') { anim = 'attack'; f = wind(3); }
     if (e.type === 'gunner') {
-      if (e.state === 'shoot') f = e.shotT > 0 ? sh.attack[1] : sh.attack[0];
-      else if (e.fireT < 0.3) f = sh.attack[0];
+      if (e.state === 'shoot') { anim = 'attack'; f = e.shotT > 0.05 ? 1 : e.shotT > 0 ? 2 : 0; }
+      else if (e.fireT < 0.3) { anim = 'attack'; f = 0; }
     }
     if (e.type === 'heavy') {
-      if (e.state === 'attack') f = e.stateT < e.t.windup * 0.7 ? sh.attack[0] : sh.attack[1];
-      if (e.state === 'charge') f = sh.attack[2];
-      if (e.state === 'recover') f = sh.hit;
+      if (e.state === 'attack') { anim = 'attack'; f = wind(3); }
+      if (e.state === 'charge') { anim = 'run'; f = Math.floor(e.stateT * 12) % A.run.frames; }
+      if (e.state === 'recover') { anim = 'hit'; f = 0; }
     }
     if (e.type === 'boss') {
-      if (e.state === 'volley') f = e.shotT > 0 ? sh.attack[1] : sh.attack[0];
-      if (e.state === 'attack') f = sh.attack[2];
+      if (e.state === 'volley') { anim = 'attack'; f = e.shotT > 0.07 ? 1 : e.shotT > 0 ? 2 : 0; }
+      if (e.state === 'attack') { anim = 'smash'; f = wind(3); }
     }
     e.shotT = (e.shotT || 0) - 1 / 60;
-    if (e.painT > 0) f = sh.hit;
-    e.frame = f;
-    this.setFrame(e, f);
-    // вспышка от попадания и ярость босса
+    if (e.painT > 0) { anim = 'hit'; f = 0; }
+    e.anim = anim; e.frame = f;
+    setSpriteFrame(e.map, e.sheet, anim, f, e.dir);
+    // белая вспышка от попадания и ярость босса
     const fl = e.flashT > 0;
     const rage = e.type === 'boss' && e.phase === 3 ? 0.25 + Math.sin(time * 10) * 0.15 : 0;
-    e.mat.emissive.setRGB(fl ? 1 : 0.23 + rage, fl ? 0.9 : 0.2, fl ? 0.85 : 0.2);
-  }
-
-  setFrame(e, f) {
-    const n = e.sheet.count;
-    if (e.flip) { e.map.repeat.x = -1 / n; e.map.offset.x = (f + 1) / n; }
-    else { e.map.repeat.x = 1 / n; e.map.offset.x = f / n; }
+    e.mat.emissive.setRGB(fl ? 1 : 0.23 + rage, fl ? 0.95 : 0.2, fl ? 0.9 : 0.2);
   }
 
   // Смерть: 4 кадра падения, потом труп остаётся. Босс — серия взрывов.
@@ -517,7 +516,7 @@ export class Enemies {
         sfx.explosion(0.8);
         G.player.addTrauma(0.2);
       }
-      this.setFrame(e, Math.random() < 0.5 ? e.sheet.hit : e.sheet.attack[1]);
+      setSpriteFrame(e.map, e.sheet, Math.random() < 0.5 ? 'hit' : 'attack', 1, e.dir);
       e.mat.emissive.setRGB(1, 0.5 + Math.random() * 0.5, 0.3);
       return;
     }
@@ -530,12 +529,13 @@ export class Enemies {
       G.onBossDead(e);
     }
     if (e.gibbed) return;
-    const d = e.sheet.death, k = e.type === 'boss' ? Math.max(0, e.deathT - 2.4) : e.deathT;
-    const i = Math.min(3, Math.floor(k / 0.11));
-    this.setFrame(e, d[i]);
+    const D = e.sheet.meta.anims.death, k = e.type === 'boss' ? Math.max(0, e.deathT - 2.4) : e.deathT;
+    const i = Math.min(D.frames - 1, Math.floor(k * D.fps));
+    setSpriteFrame(e.map, e.sheet, 'death', i, e.dir);
     e.mat.emissive.setRGB(0.2, 0.17, 0.17);
     e.group.rotation.y = Math.atan2(G.camera.position.x - e.pos.x, G.camera.position.z - e.pos.z);
-    if (i === 3 && !e.corpse) {
+    e.dir = viewDir(e.yaw, e.pos.x, e.pos.z, G.camera.position.x, G.camera.position.z);
+    if (i === D.frames - 1 && !e.corpse) {
       e.corpse = true;
       this.corpses.push(e);
       if (this.corpses.length > 40) { const old = this.corpses.shift(); old.group.visible = false; }
