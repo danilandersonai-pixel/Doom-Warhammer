@@ -17,7 +17,7 @@ export class Player {
   }
 
   reset(start) {
-    this.pos = { x: start.x, y: 0, z: start.z };
+    this.pos = { x: start.x, y: start.y || 0, z: start.z };
     this.vel = { x: 0, y: 0, z: 0 };
     this.yaw = start.yaw || 0;
     this.pitch = 0;
@@ -88,9 +88,14 @@ export class Player {
     this.vel.y -= GRAVITY * dt;
 
     const prevY = this.pos.y;
-    this.pos.x += this.vel.x * dt;
-    this.pos.z += this.vel.z * dt;
-    this.world.resolve(this.pos, this.radius, HEIGHT);
+    // движение мелкими шагами (≤ 0.25 м), чтобы рывок не "проскакивал" сквозь тонкие стены
+    const dx = this.vel.x * dt, dz = this.vel.z * dt;
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.25));
+    for (let i = 0; i < steps; i++) {
+      this.pos.x += dx / steps;
+      this.pos.z += dz / steps;
+      this.world.resolve(this.pos, this.radius, HEIGHT);
+    }
     this.pos.y += this.vel.y * dt;
 
     // земля под ногами
@@ -106,8 +111,9 @@ export class Player {
       if (wasGround && this.vel.y <= 0 && this.pos.y - g < 0.5) { this.pos.y = g; this.vel.y = 0; this.onGround = true; }
       else this.onGround = false;
     }
-    // потолок (например, перемычка над проёмом)
-    this.world.resolve(this.pos, this.radius, HEIGHT);
+    // потолок: удар головой останавливает прыжок
+    const ceil = this.world.ceilingAt(this.pos.x, this.pos.z, this.pos.y, this.radius * 0.8, HEIGHT);
+    if (this.pos.y + HEIGHT > ceil) { this.pos.y = Math.max(g, ceil - HEIGHT); if (this.vel.y > 0) this.vel.y = 0; }
 
     // чекпоинт: последняя надёжная точка на земле
     this.cpTimer -= dt;

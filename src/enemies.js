@@ -9,7 +9,7 @@ export const TYPES = {
   fanatic: { hp: 55, speed: 7.4, radius: 0.42, height: 1.85, px: 0.022, dmg: 9, range: 1.7, windup: 0.26, cooldown: 0.75, walkFps: 11 },
   gunner: { hp: 70, speed: 3.6, radius: 0.42, height: 1.85, px: 0.022, fireDelay: 1.9, burst: 3, bulletDmg: 6, keepMin: 7, keepMax: 16, walkFps: 7, muzzle: [0.42, 1.12] },
   heavy: { hp: 420, speed: 2.5, radius: 0.85, height: 2.8, px: 0.024, dmg: 26, range: 2.7, windup: 0.42, cooldown: 1.3, walkFps: 6 },
-  boss: { hp: 3200, speed: 2.7, radius: 1.6, height: 6.0, px: 0.034, dmg: 32, range: 4.2, windup: 0.55, cooldown: 1.6, walkFps: 5, muzzle: [-2.07, 2.2] },
+  boss: { hp: 2000, speed: 2.7, radius: 1.6, height: 6.0, px: 0.034, dmg: 32, range: 4.2, windup: 0.55, cooldown: 1.6, walkFps: 5, muzzle: [-2.07, 2.2] },
 };
 
 const BOX = new THREE.BoxGeometry(1, 1, 1);
@@ -231,6 +231,14 @@ export class Enemies {
         else ({ move, speed } = this.aiBoss(e, P, dx / dist, dz / dist, pdist, vdist, dt, speed, time));
       }
       e.moving = !!move;
+      // защита от застревания: 2 с почти без движения — уходим в случайную сторону
+      e.stuckT = (e.stuckT || 0) + dt;
+      if (e.stuckT > 2) {
+        const moved = Math.hypot(e.pos.x - (e.lastX ?? e.pos.x), e.pos.z - (e.lastZ ?? e.pos.z));
+        if (move && moved < 0.6) { const a = Math.random() * Math.PI * 2; e.escape = { x: Math.cos(a), z: Math.sin(a) }; e.escapeT = 1; }
+        e.stuckT = 0; e.lastX = e.pos.x; e.lastZ = e.pos.z;
+      }
+      if (e.escapeT > 0 && move) { e.escapeT -= dt; move = e.escape; }
       if (move) {
         const d = e.state === 'charge' ? move : this.steer(e, move.x, move.z, dt);
         e.pos.x += d.x * speed * dt;

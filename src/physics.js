@@ -44,7 +44,8 @@ export class World {
   resolve(p, r, height, forEnemy = false) {
     for (const b of this.boxes) {
       if (b.disabled || (b.enemyOnly && !forEnemy)) continue;
-      if (b.maxY <= p.y + STEP || b.minY >= p.y + height) continue;
+      // выше пояса — это потолок/перемычка: вбок не толкает (см. ceilingAt)
+      if (b.maxY <= p.y + STEP || b.minY >= p.y + height * 0.55) continue;
       const cx = Math.max(b.minX, Math.min(p.x, b.maxX)), cz = Math.max(b.minZ, Math.min(p.z, b.maxZ));
       const dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
       if (d2 >= r * r) continue;
@@ -58,6 +59,18 @@ export class World {
         p[opts[0][1]] = opts[0][2];
       }
     }
+  }
+
+  // Низ ближайшего потолка над головой (или Infinity)
+  ceilingAt(x, z, y, r, height) {
+    let c = Infinity;
+    for (const b of this.boxes) {
+      if (b.disabled || b.enemyOnly) continue;
+      if (b.minY < y + height * 0.55 || b.minY > y + height + 0.5) continue;
+      const cx = Math.max(b.minX, Math.min(x, b.maxX)), cz = Math.max(b.minZ, Math.min(z, b.maxZ));
+      if ((x - cx) ** 2 + (z - cz) ** 2 < r * r) c = Math.min(c, b.minY);
+    }
+    return c;
   }
 
   // Точка внутри твёрдого? (для снарядов)
