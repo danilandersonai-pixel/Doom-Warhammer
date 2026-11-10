@@ -749,7 +749,7 @@ export function buildLevel(scene, world, G) {
   const corpseSprite = (type, x, z, flip) => {
     const sh = SPRITES[type], t2 = spriteTexture(sh);
     setSpriteFrame(t2, sh, 'death', sh.meta.anims.death.frames - 1, flip ? 2 : 6);
-    const m = new THREE.Mesh(spriteGeometry(sh), new THREE.MeshLambertMaterial({ map: t2, alphaTest: 0.5, side: THREE.DoubleSide, emissive: 0x282424, emissiveMap: t2 }));
+    const m = new THREE.Mesh(spriteGeometry(sh), new THREE.MeshLambertMaterial({ map: t2, alphaTest: 0.5, side: THREE.DoubleSide, emissive: 0x5a5252, emissiveMap: t2 }));
     m.position.set(x, -0.02, z);
     m.receiveShadow = true;
     scene.add(m);
