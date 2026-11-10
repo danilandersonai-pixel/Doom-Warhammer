@@ -34,6 +34,13 @@ export class Weapons {
     this.tmp = new THREE.Vector3();
     this.dir = new THREE.Vector3();
     this.screenBlood = [];
+    this.muzzleNdc = new THREE.Vector2(0.1, -0.3);   // где на экране дуло нарисованного оружия (обновляется в draw)
+    this.casePos = new THREE.Vector3();
+    this.caseVel = new THREE.Vector3();
+    this.wasGround = true;
+    this.lastVy = 0;
+    this.lastDash = 0;
+    if (G.fx.bind) G.fx.bind(G);
     this.reset();
   }
 
@@ -100,6 +107,10 @@ export class Weapons {
 
   update(dt, input, time) {
     const G = this.G, P = G.player;
+    // пыль из-под ног: жёсткое приземление и рывок по земле
+    if (P.onGround && !this.wasGround && this.lastVy < -6) G.fx.footDust({ x: P.pos.x, y: P.pos.y + 0.12, z: P.pos.z }, Math.min(1.7, -this.lastVy / 8));
+    if (P.dashT > 0 && this.lastDash <= 0 && P.onGround) G.fx.footDust({ x: P.pos.x, y: P.pos.y + 0.12, z: P.pos.z }, 1.4);
+    this.wasGround = P.onGround; this.lastVy = P.vel.y; this.lastDash = P.dashT;
     this.cooldown -= dt;
     this.flashT -= dt;
     this.shotAge += dt;
@@ -170,9 +181,21 @@ export class Weapons {
     sfx.chainSwing();
   }
 
-  // Точка дула в мире (для трассеров и света)
+  // Точка дула в мире (для трассеров, луча и света): лежит на луче из камеры через дуло спрайта на экране,
+  // поэтому трассер и луч выходят точно из нарисованного ствола, а не из-за него
   muzzleWorld() {
-    return this.tmp.set(0.18, -0.2, -0.7).applyMatrix4(this.G.camera.matrixWorld).clone();
+    const cam = this.G.camera;
+    this.tmp.set(this.muzzleNdc.x, this.muzzleNdc.y, 0.5).unproject(cam).sub(cam.position).normalize();
+    return this.tmp.multiplyScalar(1.1).add(cam.position).clone();
+  }
+
+  // Гильза вылетает вправо-вверх из-под оружия (у дробовика — красная)
+  ejectCasing(shell) {
+    const G = this.G, cam = G.camera, P = G.player;
+    this.casePos.set(0.3, -0.24, -0.75).applyMatrix4(cam.matrixWorld);
+    this.caseVel.set(2.4 + Math.random() * 1.4, 1.8 + Math.random() * 1.4, -0.2 + Math.random() * 0.8).applyQuaternion(cam.quaternion);
+    this.caseVel.x += P.vel.x; this.caseVel.z += P.vel.z;
+    G.fx.casings.spawn(this.casePos, this.caseVel, shell, G.fx.lightTint(this.casePos));
   }
 
   aimDir(spread) {
@@ -203,11 +226,13 @@ export class Weapons {
       G.projectiles.playerPlasma(muzzle, this.aimDir(0.004), w);
     } else {
       const origin = G.camera.getWorldPosition(new THREE.Vector3());
+      const shotgun = this.current === 'shotgun';
+      this.ejectCasing(shotgun);
       for (let i = 0; i < w.pellets; i++) {
         const d = this.aimDir(w.spread);
         const hit = G.hitscan(origin, d, 120);
         const end = hit ? hit.point : origin.clone().addScaledVector(d, 60);
-        if (i < 3) G.fx.beams.tracer(muzzle, end, 0xffd080, this.current === 'shotgun' ? 0.025 : 0.04);
+        if (i < 6) G.fx.beams.tracer(muzzle, end, 0xffd080, shotgun ? 0.028 : 0.042, 0.06, shotgun ? 2.4 : 3.4);
         if (hit) G.applyHit(hit, w.dmg, d, this.current);
         // разрывной патрон
         if (hit && w.splash) {
@@ -233,9 +258,9 @@ export class Weapons {
     const hit = G.hitscan(origin, d, w.range);
     const end = hit ? hit.point : origin.clone().addScaledVector(d, w.range);
     const muzzle = this.muzzleWorld();
-    G.fx.beams.beam(muzzle, end, true, time);
+    G.fx.beams.beam(muzzle, end, true, time, hit, dt);
     G.fx.lights.flash(end, 0xff7020, 22, 0.06, 7);
-    if (Math.random() < 0.6) G.fx.sparks.burst(end, 3, 0xffa040, { speed: 4, life: 0.5, gravity: -1, size: 0.08 });
+    if (Math.random() < 0.6) G.fx.sparks.burst(end, 3, 0xffa040, { speed: 4, life: 0.5, gravity: -1, size: 0.08, hdr: 3.2 });
     if (hit) {
       G.applyHit(hit, w.dps * dt, d, 'thermal', true);
       G.damageArea(hit.point, 1.0, w.dps * dt * 0.4, 'thermal', hit.enemy, true);
@@ -253,6 +278,9 @@ export class Weapons {
       if ((dx * f.x + dz * f.z) / d < 0.45) continue;
       const killed = G.enemies.damage(e, w.dmg, { x: e.pos.x - dx / d * e.radius, y: e.pos.y + e.height * 0.55, z: e.pos.z - dz / d * e.radius }, 'chainblade', { x: dx / d, y: 0, z: dz / d });
       G.enemies.knockback(e, dx / d, dz / d, e.type === 'boss' ? 2 : 10);
+      // цепь рвёт плоть: веер крови в сторону удара
+      const bp = { x: e.pos.x - dx / d * e.radius, y: e.pos.y + e.height * 0.55, z: e.pos.z - dz / d * e.radius };
+      G.fx.blood.burst(bp, 16, 0xe21b22, { speed: 9, life: 0.9, gravity: 14, size: 0.13, sizeVar: 1.5, dir: { x: f.z * 1.2, y: 0.9, z: -f.x * 1.2 }, spread: 0.8, tint: G.fx.lightTint(bp) });
       hits++;
       if (killed || Math.random() < 0.5) this.splatterScreen(killed ? 14 : 6);
     }
@@ -261,7 +289,17 @@ export class Weapons {
       const dx = b.x - P.pos.x, dz = b.z - P.pos.z, d = Math.hypot(dx, dz);
       if (d < w.range && (dx * f.x + dz * f.z) / d > 0.45) G.pickups.damageBarrel(b, w.dmg);
     }
-    if (hits) { sfx.chainHit(); P.addTrauma(0.3); G.hud.hitmarker(false); }
+    if (hits) { sfx.chainHit(); P.addTrauma(0.3); G.hud.hitmarker(false); return; }
+    // мимо врагов: зубья высекают сноп искр из камня
+    const origin = G.camera.getWorldPosition(new THREE.Vector3());
+    const hit = G.hitscan(origin, this.aimDir(0), w.range);
+    if (hit && !hit.enemy && !hit.barrel) {
+      G.fx.sparks.burst(hit.point, 22, 0xffd070, { speed: 9, life: 0.45, gravity: 10, dir: hit.normal, spread: 0.9, size: 0.055, hdr: 3.6 });
+      G.fx.impact(hit.point, hit.normal, { scale: 1.5 });
+      G.fx.lights.flash(hit.point, 0xffb050, 12, 0.1, 6);
+      P.addTrauma(0.12);
+      sfx.impact(0.35);
+    }
   }
 
   // Брызги крови на экране
@@ -316,6 +354,7 @@ export class Weapons {
     const x = Math.round((OW - 560) / 2 + viewX + Math.cos(P.bob) * 6 * bob);
     const y = Math.round(OH - ch + 4 + Math.abs(Math.sin(P.bob)) * 6 * bob + Math.sin(time * 1.7) * 1.2 + Math.max(-8, Math.min(10, P.vel.y * -0.8)));
     const [sx, sy] = this.frameOf(sheet, anim, f);
+    if (sheet.meta.muzzle && sheet === this.sheets[k]) this.muzzleNdc.set(((x + sheet.meta.muzzle[0] * cw) / OW) * 2 - 1, 1 - ((y + sheet.meta.muzzle[1] * ch) / OH) * 2);
     const flashLit = (this.flashT > 0 || this.beamOn) && this.swingT < 0 && !this.def.melee;
     if (flashLit) {
       // при выстреле оружие подсвечено вспышкой: умножаем на тёплый цвет и добавляем свет
