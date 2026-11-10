@@ -19,7 +19,7 @@ import { PostFX } from './postfx.js';
 // Шрифты грузим из скрипта, чтобы они не задерживали старт (нет сети — останутся системные)
 const fontLink = document.createElement('link');
 fontLink.rel = 'stylesheet';
-fontLink.href = 'https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Yanone+Kaffeesatz:wght@400;700&display=swap';
+fontLink.href = 'https://fonts.googleapis.com/css2?family=Forum&family=Press+Start+2P&family=Yanone+Kaffeesatz:wght@400;700&display=swap';
 document.head.appendChild(fontLink);
 
 const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
@@ -148,20 +148,50 @@ G.onBossDead = () => G.flow.onBossDead();
 G.onComplete = () => endGame(true);
 
 // ---------- Экраны ----------
+// Один оверлей #screen в четырёх режимах (data-mode): menu — титул поверх облёта арены, pause, dead, won.
+// Поверх него открываются листы настроек и управления.
 const screen = document.getElementById('screen');
 const $ = (id) => document.getElementById(id);
+const INTRO = 'Орден Железного Похода высадился у осквернённой площади. Очисти её от еретиков и сокруши их Колосса.';
 $('controlsHelp').innerHTML = isTouch
-  ? 'Слева — стик движения, справа — свайп для обзора. Кнопки: огонь (можно вести пальцем), прыжок, рывок, удар клинком, граната, перезарядка/смена оружия.'
-  : 'WASD — бег · мышь — обзор · ЛКМ — огонь · Пробел — прыжок · Shift — рывок<br>F или ПКМ — цепной клинок · G — граната · R — перезарядка · 1–5 или колесо — оружие · Esc — пауза';
-$('screenText').textContent = 'Орден Железного Похода высадился у осквернённой площади. Очисти её от еретиков и сокруши их Колосса.';
+  ? `<ul class="touchHelp">
+      <li><b>Движение</b> — коснись левой части экрана: появится стик.</li>
+      <li><b>Обзор</b> — свайп по правой части. Кнопку огня можно вести пальцем, чтобы целиться.</li>
+      <li><b>Кнопки справа</b> — огонь, прыжок, рывок, удар цепным клинком.</li>
+      <li><b>Нижняя панель</b> — тап по иконке оружия меняет оружие, по счётчику патронов — перезарядка, по гранате — бросок.</li>
+      <li><b>Пауза</b> — три полоски справа сверху.</li>
+    </ul>`
+  : `<div class="keys">
+      <kbd>W A S D</kbd><span>бег</span><kbd>Мышь</kbd><span>обзор</span>
+      <kbd>ЛКМ</kbd><span>огонь</span><kbd>ПКМ · F</kbd><span>цепной клинок</span>
+      <kbd>Пробел</kbd><span>прыжок</span><kbd>Shift</kbd><span>рывок</span>
+      <kbd>G</kbd><span>граната</span><kbd>R</kbd><span>перезарядка</span>
+      <kbd>1–5 · колесо</kbd><span>смена оружия</span><kbd>Esc</kbd><span>пауза</span>
+    </div>`;
+$('screenText').textContent = INTRO;
+$('footHint').innerHTML = isTouch ? '' : '<b>WASD</b> бег · <b>ЛКМ</b> огонь · <b>Shift</b> рывок · <b>F</b> клинок · <b>G</b> граната · <b>Esc</b> пауза';
 
-function showScreen(title, sub, html, btn, restart = false) {
+function showScreen(mode, title, sub, html, btn, restart = false) {
+  screen.dataset.mode = mode;
   $('screenTitle').textContent = title;
   $('screenSub').textContent = sub;
   $('screenText').innerHTML = html;
   $('screenBtn').textContent = btn;
   $('restartBtn').classList.toggle('hidden', !restart);
+  closeSheets();
   screen.classList.remove('hidden');
+}
+
+// листы настроек и управления
+function closeSheets() {
+  $('settings').classList.add('hidden');
+  $('controls').classList.add('hidden');
+  screen.classList.remove('sheetOpen');
+}
+function openSheet(id) {
+  closeSheets();
+  $(id).classList.remove('hidden');
+  screen.classList.add('sheetOpen');
 }
 
 function lockPointer() {
@@ -178,6 +208,7 @@ function startGame() {
   G.player.reset(G.level.playerStart);
   G.weapons.reset();
   G.pickups.reset();
+  G.hud.reset();
   G.flow.reset();
   game.stats = { kills: 0 };
   game.elapsed = 0;
@@ -199,11 +230,18 @@ function pause() {
   game.state = 'paused';
   G.input.reset();
   sfx.beam(false);
+  $('touch').classList.add('hidden');
   if (document.pointerLockElement) document.exitPointerLock();
-  showScreen('ПАУЗА', 'бой ждёт', '', 'ПРОДОЛЖИТЬ', true);
+  showScreen('pause', 'ПАУЗА', 'бой ждёт', '', 'ПРОДОЛЖИТЬ', true);
 }
 
 function fmtTime(t) { return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`; }
+
+// Ранг за прохождение: скорость и найденный тайник
+function rankOf(t, secret) {
+  const pts = (t < 240 ? 2 : t < 360 ? 1 : 0) + (secret ? 1 : 0);
+  return pts >= 3 ? ['I', 'Паладин похода'] : pts === 2 ? ['II', 'Рыцарь ордена'] : pts === 1 ? ['III', 'Брат-воин'] : ['IV', 'Оруженосец'];
+}
 
 function endGame(won) {
   game.state = won ? 'won' : 'dead';
@@ -211,22 +249,35 @@ function endGame(won) {
   sfx.beam(false);
   $('touch').classList.add('hidden');
   if (document.pointerLockElement) document.exitPointerLock();
-  const stats = `<div class="stats"><span>Время</span><b>${fmtTime(game.elapsed)}</b><span>Убито врагов</span><b>${game.stats.kills}</b><span>Секреты</span><b>${G.flow.secretFound ? 1 : 0} / 1</b></div>`;
+  const secret = G.flow.secretFound;
+  const rows = `<span>Время</span><b>${fmtTime(game.elapsed)}</b><span>Убито врагов</span><b>${game.stats.kills}</b><span>Секреты</span><b>${secret ? 1 : 0} / 1</b>`;
   if (won) {
+    const [num, name] = rankOf(game.elapsed, secret);
+    const medal = `<div class="medal r${ROMAN_RANK[num]}"><svg viewBox="0 0 100 100"><use href="#crest"/></svg></div>`;
     sfx.victory();
     music.setIntensity(0);
-    showScreen('ПЛОЩАДЬ ОЧИЩЕНА', 'уровень пройден', stats, 'ЕЩЁ РАЗ');
+    showScreen('won', 'ПЛОЩАДЬ ОЧИЩЕНА', 'уровень пройден', `<div class="result">${medal}<div class="stats">${rows}<div class="rank">Ранг ${num} · ${name}</div></div></div>`, 'ЕЩЁ РАЗ');
   } else {
+    const F = G.flow;
+    const where = F.stage === 'boss' ? 'в бою с Колоссом' : F.wave >= 0 ? `на волне ${F.wave + 1} из 3` : 'на подступах к площади';
     sfx.defeat();
-    showScreen('ВЫ ПАЛИ', 'орден помнит', stats, 'ЗАНОВО');
+    showScreen('dead', 'ВЫ ПАЛИ', 'орден помнит', `<div class="result"><div class="stats">${rows}<div class="rank">Пал ${where}</div></div></div>`, 'ЗАНОВО');
   }
 }
+const ROMAN_RANK = { I: 1, II: 2, III: 3, IV: 4 };
 
 $('screenBtn').addEventListener('click', () => { if (game.state === 'paused') resume(); else startGame(); });
 $('restartBtn').addEventListener('click', () => startGame());
+$('settingsBtn').addEventListener('click', () => openSheet('settings'));
+$('controlsBtn').addEventListener('click', () => openSheet('controls'));
+for (const b of document.querySelectorAll('.sheetClose')) b.addEventListener('click', closeSheets);
 $('menuBtn').addEventListener('click', () => pause());
-$('menuBtn').addEventListener('touchend', (e) => { e.preventDefault(); pause(); });
-document.getElementById('weaponIcon').addEventListener('touchend', (e) => { e.preventDefault(); G.weapons.cycle(1); });
+window.addEventListener('keydown', (e) => {
+  if (game.state === 'playing') return;
+  if (e.code === 'Enter' && e.target && e.target.closest && e.target.closest('button, input')) return;   // Enter на кнопке — её собственный клик
+  if (e.code === 'Escape' && screen.classList.contains('sheetOpen')) closeSheets();
+  else if (e.code === 'Enter' && !screen.classList.contains('sheetOpen')) $('screenBtn').click();
+});
 
 // настройки
 const bind = (id, key, parse = Number) => {
@@ -240,6 +291,28 @@ const bind = (id, key, parse = Number) => {
   });
 };
 bind('setSens', 'sens'); bind('setBtnSize', 'btnSize'); bind('setBtnAlpha', 'btnAlpha'); bind('setMusic', 'music'); bind('setGyro', 'gyro');
+
+// качество графики: Авто / Низкое / Среднее / Высокое
+const QUALITY_LABEL = { low: 'Низкое', medium: 'Среднее', high: 'Высокое' };
+const QUALITY_HINT = { low: 'без теней и свечения — для слабых телефонов', medium: 'тени и свечение', high: 'тени высокого разрешения, сглаживание, лучи света' };
+function showQuality() {
+  const cur = QUALITY[settings.quality] ? settings.quality : 'auto', real = qualityName();
+  for (const b of $('setQuality').children) b.classList.toggle('on', b.dataset.q === cur);
+  $('qualityHint').textContent = (cur === 'auto' ? `Авто → ${QUALITY_LABEL[real]}: ` : '') + QUALITY_HINT[real];
+}
+for (const b of $('setQuality').children) {
+  b.addEventListener('click', () => {
+    settings.quality = b.dataset.q;
+    saveSettings();
+    G.applyQuality();
+    showQuality();
+  });
+}
+showQuality();
+
+// всё загружено и построено — убираем экран загрузки
+const loading = $('loading');
+if (loading) { loading.classList.add('done'); setTimeout(() => loading.remove(), 700); }
 
 document.addEventListener('pointerlockchange', () => {
   if (document.pointerLockElement) game.wasLocked = true;
