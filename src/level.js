@@ -5,8 +5,7 @@ import { envTextures } from './textures.js';
 import { SPRITES, spriteTexture, setSpriteFrame, spriteGeometry } from './sprites.js';
 import { miscArt, haloCanvas } from './art_misc.js';
 import { nearestTexture, rng } from './pixel.js';
-
-export const FOG_COLOR = 0x6e5a66;
+import { SUN_DIR } from './sky.js';
 
 // Коробка, у которой UV растянуты по размеру (texScale метров на один повтор текстуры)
 function boxGeo(w, h, d, texScale) {
@@ -28,15 +27,18 @@ function boxGeo(w, h, d, texScale) {
   return g;
 }
 
-export function buildLevel(scene, world) {
+export function buildLevel(scene, world, G) {
   const T = envTextures();
   const R = rng(42);
   const solid = [];               // меши для лучей выстрелов
-  const mat = (map, extra = {}) => new THREE.MeshLambertMaterial({ map, ...extra });
+  const mat = (map, normalMap, extra = {}) => new THREE.MeshLambertMaterial({ map, normalMap, ...extra });
+  const shiny = (map, normalMap, specularMap, extra = {}) => new THREE.MeshPhongMaterial({ map, normalMap, specularMap, specular: 0x8fa2c4, shininess: 70, ...extra });
   const M = {
-    snow: mat(T.snow), rock: mat(T.rock), blocks: mat(T.blocks), metal: mat(T.metal), sand: mat(T.sandbags),
-    crate: mat(T.crate), gate: mat(T.gate), tiles: mat(T.tiles), hull: mat(T.hull),
-    slate: new THREE.MeshLambertMaterial({ color: 0x3c4252 }),
+    snow: shiny(T.snow, T.snowN, T.snowS), rock: mat(T.rock, T.rockN), blocks: mat(T.blocks, T.blocksN),
+    metal: shiny(T.metal, T.metalN, null, { specular: 0x56606e, shininess: 34 }), sand: mat(T.sandbags),
+    crate: shiny(T.crate, T.crateN, null, { specular: 0x4a4636, shininess: 26 }), gate: shiny(T.gate, T.gateN, null, { specular: 0x505866, shininess: 30 }),
+    tiles: shiny(T.tiles, T.tilesN, T.tilesS), hull: mat(T.hull, T.hullN),
+    slate: new THREE.MeshLambertMaterial({ color: 0x2c3040 }),
   };
   const capMat = M.snow; // снег на верхушках
 
@@ -48,7 +50,7 @@ export function buildLevel(scene, world) {
   const shadowTex = (() => {
     const c = document.createElement('canvas'); c.width = c.height = 64;
     const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 8, 32, 32, 32);
-    gr.addColorStop(0, 'rgba(20,26,40,0.55)'); gr.addColorStop(1, 'rgba(20,26,40,0)');
+    gr.addColorStop(0, 'rgba(12,14,26,0.42)'); gr.addColorStop(1, 'rgba(20,26,40,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
     return new THREE.CanvasTexture(c);
   })();
@@ -68,6 +70,7 @@ export function buildLevel(scene, world) {
     const mesh = new THREE.Mesh(boxGeo(w, h, d, texScale), mats);
     mesh.position.set(x, y0 + h / 2, z);
     mesh.rotation.y = rotY;
+    mesh.castShadow = mesh.receiveShadow = true;
     scene.add(mesh);
     if (ray) solid.push(mesh);
     let box = null;
@@ -87,72 +90,13 @@ export function buildLevel(scene, world) {
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * (x1 - x0)) / texScale, (uv.getY(i) * (z1 - z0)) / texScale);
     const mesh = new THREE.Mesh(g, m);
     mesh.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+    mesh.receiveShadow = true;
     scene.add(mesh);
     solid.push(mesh);
     return mesh;
   }
 
-  // ---------------- Небо, туман, свет ----------------
-  scene.background = new THREE.Color(FOG_COLOR);
-  // крупный тёмный фон: шпили собора за стенами (подсвечены дымкой)
-  scene.fog = new THREE.FogExp2(FOG_COLOR, 0.026);
-  const skyGeo = new THREE.SphereGeometry(400, 32, 16);
-  const top = new THREE.Color(0x2e2430), hor = new THREE.Color(FOG_COLOR), cols = [];
-  const sp = skyGeo.attributes.position;
-  for (let i = 0; i < sp.count; i++) {
-    const t = Math.max(0, sp.getY(i) / 400);
-    const c = hor.clone().lerp(top, Math.pow(t, 0.6));
-    cols.push(c.r, c.g, c.b);
-  }
-  skyGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
-  scene.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false })));
-  // крупное бледное светило с ореолом
-  const sunTex = new THREE.CanvasTexture(haloCanvas('255,250,235', 128));
-  const sunHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, fog: false, depthWrite: false, transparent: true, opacity: 0.85 }));
-  sunHalo.scale.set(140, 140, 1);
-  sunHalo.position.set(150, 170, -260);
-  // пасмурное небо: светило не показываем
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(16, 32), new THREE.MeshBasicMaterial({ color: 0xfbf8ee, fog: false }));
-  disc.position.copy(sunHalo.position);
-  disc.lookAt(0, 0, 0);
-
-
-  scene.add(new THREE.HemisphereLight(0xe2d0c0, 0x5a4030, 1.5));
-  const sun = new THREE.DirectionalLight(0xffd6a4, 1.3);
-  sun.position.set(30, 50, -40);
-  scene.add(sun);
-
-  // ---------------- Дальний план: горы и шпили в дымке ----------------
-  const hazeMat = (c) => new THREE.MeshBasicMaterial({ color: c, fog: false });
-  const ico = new THREE.IcosahedronGeometry(1, 1);
-  for (let i = 0; i < 22; i++) {
-    const a = (i / 22) * Math.PI * 2 + R() * 0.2, d = 150 + R() * 70;
-    const m = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x2a1e26), 0.35 + R() * 0.25)));
-    const h = 40 + R() * 70;
-    m.scale.set(30 + R() * 30, h, 30 + R() * 30);
-    m.position.set(Math.cos(a) * d, h * 0.25, Math.sin(a) * d);
-    m.rotation.y = R() * 3;
-    scene.add(m);
-    // снежные шапки
-    const capM = new THREE.Mesh(ico, hazeMat(new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x34262e), 0.4)));
-    capM.scale.set(m.scale.x * 0.45, h * 0.35, m.scale.z * 0.45);
-    capM.position.set(m.position.x, m.position.y + h * 0.6, m.position.z);
-    scene.add(capM);
-  }
   const cone4 = new THREE.ConeGeometry(1, 1, 4);
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2 + R() * 0.3, d = 70 + R() * 30;
-    const c = new THREE.Color(FOG_COLOR).lerp(new THREE.Color(0x1e161c), 0.4 + R() * 0.25);
-    const w = 3 + R() * 4, h = 14 + R() * 26;
-    const tower = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), hazeMat(c));
-    tower.position.set(Math.cos(a) * d, h / 2 - 2, Math.sin(a) * d);
-    scene.add(tower);
-    const roof = new THREE.Mesh(cone4, hazeMat(c));
-    roof.scale.set(w * 0.8, h * 0.5, w * 0.8);
-    roof.position.set(tower.position.x, h - 2 + h * 0.25, tower.position.z);
-    roof.rotation.y = Math.PI / 4;
-    scene.add(roof);
-  }
 
   // ---------------- Земля (снег) с дырой-пропастью ----------------
   const PIT = { minX: 13, maxX: 20, minZ: -6, maxZ: 6 };
@@ -486,8 +430,58 @@ export function buildLevel(scene, world) {
   block(-22.6, 10.5, 3, 4.6, 3.6, 0.6, M.rock, { texScale: 2 });                    // потолок
   const secret = { minX: -24.2, maxX: -21.2, minZ: 8.4, maxZ: 12.6 };
 
+  // ---------------- Свет от огня: настоящие точечные источники в ключевых местах ----------------
+  const fireLights = [];
+  for (const [x, y, z, power, dist, color] of [
+    [0, 2.7, 18.4, 70, 17, 0xff8a3c], [0, PH + 2.5, -11.2, 70, 17, 0xff8a3c], [0, PH + 2.8, -18.4, 60, 15, 0xff8a3c],
+    [-14.6, 3.2, -9.6, 60, 14, 0xff7a30], [-19, 2.4, -19, 40, 13, 0xff8a3c], [19, 2.4, -19, 40, 13, 0xff8a3c], [16.5, -0.6, 0, 55, 14, 0xff5a1c],
+  ]) {
+    const l = new THREE.PointLight(color, power, dist, 2);
+    l.position.set(x, y, z);
+    scene.add(l);
+    fireLights.push({ l, power, phase: R() * 10 });
+  }
+  function setLights(n) { fireLights.forEach((f, i) => { f.l.visible = i < n; }); }
+
+  // ---------------- Световая сетка: где на площади лежит прямой свет светила ----------------
+  // Нужна для местного освещения спрайтов (оружие в руках, тени врагов) без дорогих расчётов в кадре.
+  const LG = { x0: -27, z0: -32, nx: 54, nz: 72, sun: null };
+  LG.sun = new Float32Array(LG.nx * LG.nz);
+  {
+    const rc = new THREE.Raycaster(), o = new THREE.Vector3();
+    rc.far = 90;
+    scene.updateMatrixWorld(true);
+    for (let j = 0; j < LG.nz; j++) for (let i = 0; i < LG.nx; i++) {
+      const x = LG.x0 + i + 0.5, z = LG.z0 + j + 0.5;
+      const gy = Math.max(0, world.groundAt(x, z, 3, 0.1));
+      rc.set(o.set(x, gy + 1.3, z), SUN_DIR);
+      LG.sun[j * LG.nx + i] = rc.intersectObjects(solid, false).length ? 0 : 1;
+    }
+  }
+  const sunAt = (x, z) => {
+    const fx = Math.max(0, Math.min(LG.nx - 1.001, x - LG.x0 - 0.5)), fz = Math.max(0, Math.min(LG.nz - 1.001, z - LG.z0 - 0.5));
+    const i = Math.floor(fx), j = Math.floor(fz), tx = fx - i, tz = fz - j, S = LG.sun, n = LG.nx;
+    return (S[j * n + i] * (1 - tx) + S[j * n + i + 1] * tx) * (1 - tz) + (S[(j + 1) * n + i] * (1 - tx) + S[(j + 1) * n + i + 1] * tx) * tz;
+  };
+  // Цвет местного света в точке: холодная тень / тёплое солнце + отсвет ближайших огней
+  function lightAt(p, out) {
+    const s = sunAt(p.x, p.z);
+    let fire = 0;
+    for (const f of fireLights) {
+      if (!f.l.visible) continue;
+      const d2 = (f.l.position.x - p.x) ** 2 + (f.l.position.z - p.z) ** 2 + (f.l.position.y - p.y) ** 2;
+      fire += Math.max(0, 1 - Math.sqrt(d2) / f.l.distance) ** 2 * 0.5;
+    }
+    fire = Math.min(0.6, fire);
+    if (out) out.setRGB(0.6 + s * 0.5 + fire * 0.7, 0.68 + s * 0.34 + fire * 0.32, 0.86 + s * 0.06);
+    return s;
+  }
+
   // ---------------- Анимация: огонь мерцает, знамёна колышутся ----------------
+  const api = { shadowsDirty: true };
   function update(dt, time) {
+    for (const f of fireLights) f.l.intensity = f.power * (0.86 + Math.sin(time * 11 + f.phase) * 0.07 + Math.sin(time * 23.7 + f.phase * 2) * 0.07);
+    if (Math.abs(gates.entry.y - (gates.entry.open ? 4.8 : 0)) > 0.01 || Math.abs(gates.exit.y - PH - (gates.exit.open ? 4.8 : 0)) > 0.01) api.shadowsDirty = true;
     for (const f of fires) {
       f.map.offset.x = (Math.floor(time * 10 + f.phase) % f.count) / f.count;
       f.halo.material.opacity = 0.45 + Math.sin(time * 13 + f.phase) * 0.08;
@@ -497,13 +491,23 @@ export function buildLevel(scene, world) {
     gates.exit.update(dt);
   }
 
-  return {
-    solid, spawnPoints, pickupSpots, barrelSpots, gates, secret, update, PH,
+  // тени от светила: твёрдые предметы отбрасывают и принимают, декали и полупрозрачное — только принимают
+  for (const c of corpses) c.userData.noCast = true;
+  scene.traverse((o) => {
+    if (!o.isMesh) return;
+    const m = Array.isArray(o.material) ? o.material[0] : o.material;
+    if (!m.isMeshLambertMaterial && !m.isMeshPhongMaterial) return;
+    o.receiveShadow = true;
+    if (!m.transparent && !o.userData.noCast) o.castShadow = true;
+  });
+
+  return Object.assign(api, {
+    solid, spawnPoints, pickupSpots, barrelSpots, gates, secret, update, PH, setLights, lightAt, sunAt,
     playerStart: { x: 0, z: 30, yaw: 0 },
     arenaEnter: (p) => p.z < 18.5 && Math.abs(p.x) < 19,
     exitReached: (p) => p.z < -26,
     exitPoint: { x: 0, y: PH, z: -24 },
     arenaCenter: { x: 0, y: 0, z: 6 },
     decorCorpses: corpses,
-  };
+  });
 }

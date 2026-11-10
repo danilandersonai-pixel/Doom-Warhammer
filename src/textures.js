@@ -1,5 +1,6 @@
 // Процедурные текстуры окружения: тайлы 128–256 px, чёткие пиксели (NearestFilter),
 // но с деталями: заклёпки, швы, трещины, потёртости, копоть, снежный налёт, шум.
+import * as THREE from 'three';
 import { nearestTexture, rng, noise2, hex } from './pixel.js';
 import { TEX_IMG } from './sprites.js';
 
@@ -339,7 +340,7 @@ function gothicStone() {
   const T = canvasRGBA(128, 128), R = rng(51), n = noise2(53);
   for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
     const v = 0.5 + (fbm(n, x / 8, y / 8) - 0.5) * 0.5 + (fbm(n, x / 40, y / 40 + 5) - 0.5) * 0.35;
-    const c = mix(hex('#463830'), hex('#9a8268'), clamp(v, 0, 1));
+    const c = mix(hex('#30323e'), hex('#9498aa'), clamp(v, 0, 1));
     T.set(x, y, c[0], c[1], c[2]);
   }
   // горизонтальные пояса-карнизы сверху и снизу
@@ -425,13 +426,13 @@ function stains(T, seed, { puddles = 0, soot = 0, streaks = 0 } = {}) {
   for (let i = 0; i < streaks; i++) { const x0 = R() * T.w | 0, y0 = R() * T.h * 0.4 | 0, len = 20 + R() * 60; for (let y = 0; y < len; y++) { const k = 1 - y / len; T.shade(x0 + (Math.sin(y * 0.2) > 0.9 ? 1 : 0), y0 + y, 1 - 0.3 * k); const [r, g, b] = T.get(x0, y0 + y); T.set(x0 + 1, y0 + y, r * 0.95 + 18 * k, g * 0.9, b * 0.8); } }
 }
 function floorCC0(dark) {
-  const T = fromImage('floor', dark ? [150, 136, 122] : [214, 196, 172], 1.15);
+  const T = fromImage('floor', dark ? [132, 136, 152] : [186, 188, 204], 1.2);
   if (!T) return flagstones(dark);
   stains(T, dark ? 81 : 80, { puddles: 3, soot: 6 });
   return T.done();
 }
 function metalCC0() {
-  const T = fromImage('metal', [196, 190, 186], 1.1);
+  const T = fromImage('metal', [178, 184, 198], 1.15);
   if (!T) return metal();
   // рамка плиты и ряды заклёпок по краю
   for (let i = 0; i < T.w; i++) for (const e of [0, 1, T.w - 2, T.w - 1]) { T.shade(i, e, e < 2 ? 1.35 : 0.55); T.shade(e, i, e < 2 ? 1.3 : 0.6); }
@@ -440,7 +441,7 @@ function metalCC0() {
   return T.done();
 }
 function rockCC0() {
-  const T = fromImage('rock', [176, 150, 128], 1.1);
+  const T = fromImage('rock', [150, 152, 170], 1.15);
   if (!T) return rock();
   stains(T, 83, { soot: 3 });
   return T.done();
@@ -461,15 +462,99 @@ function gothicCC0() {
   return base;
 }
 
+
+// ======== Рельеф и блеск: карты нормалей и бликов считаются из самой текстуры ========
+// Высота = яркость (светлое выше, тёмные швы и трещины ниже) → нормаль по перепаду высот.
+// Свет от вспышек и огня «лепит» кладку, заклёпки и трещины. flat(x, y) 0..1 — где рельеф сглажен (вода).
+function heightOf(src) {
+  const w = src.width, h = src.height;
+  const d = src.getContext('2d').getImageData(0, 0, w, h).data;
+  const H = new Float32Array(w * h), B = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) H[i] = (d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114) / 255;
+  // лёгкое сглаживание 3×3 — без «песка» из одиночных пикселей
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let s = 0;
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) s += H[((y + j + h) % h) * w + ((x + i + w) % w)] * (i === 0 && j === 0 ? 4 : 1);
+    B[y * w + x] = s / 12;
+  }
+  return { H: B, w, h };
+}
+function normalCanvas(src, strength = 3, flat = null) {
+  const { H, w, h } = heightOf(src);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d'), img = g.createImageData(w, h), o = img.data;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const k = strength * (flat ? 1 - flat(x, y) : 1);
+    const dx = (H[y * w + ((x + 1) % w)] - H[y * w + ((x - 1 + w) % w)]) * k;
+    const dy = (H[((y - 1 + h) % h) * w + x] - H[((y + 1) % h) * w + x]) * k;   // v текстуры растёт вверх
+    const l = Math.hypot(dx, dy, 1), i = (y * w + x) * 4;
+    o[i] = (-dx / l * 0.5 + 0.5) * 255; o[i + 1] = (-dy / l * 0.5 + 0.5) * 255; o[i + 2] = (1 / l * 0.5 + 0.5) * 255; o[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+function dataTexture(canvas) {
+  const t = new THREE.CanvasTexture(canvas);
+  t.magFilter = THREE.NearestFilter;
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.NoColorSpace;
+  return t;
+}
+// Тайловый шум: решётка P×P случайных значений с заворотом — стыкуется на границе текстуры
+function tileNoise(seed, P) {
+  const R = rng(seed), lat = new Float32Array(P * P);
+  for (let i = 0; i < lat.length; i++) lat[i] = R();
+  return (u, v) => {
+    const fx = (((u % 1) + 1) % 1) * P, fy = (((v % 1) + 1) % 1) * P, xi = Math.floor(fx), yi = Math.floor(fy);
+    const tx = fx - xi, ty = fy - yi, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    const a = lat[(yi % P) * P + (xi % P)], b = lat[(yi % P) * P + ((xi + 1) % P)], c = lat[((yi + 1) % P) * P + (xi % P)], d = lat[((yi + 1) % P) * P + ((xi + 1) % P)];
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  };
+}
+// Мокрые плиты: лужи по крупному шуму. Камень в луже чуть темнее, рельеф сглажен, блик сильный.
+function wetFloor(canvas, seed, amount) {
+  const w = canvas.width, h = canvas.height;
+  const n1 = tileNoise(seed, 3), n2 = tileNoise(seed + 1, 7), n3 = tileNoise(seed + 2, 17);
+  const g = canvas.getContext('2d'), img = g.getImageData(0, 0, w, h), d = img.data;
+  const wet = new Float32Array(w * h);
+  const spec = document.createElement('canvas');
+  spec.width = w; spec.height = h;
+  const sg = spec.getContext('2d'), simg = sg.createImageData(w, h), sd = simg.data;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, lum = (d[i] + d[i + 1] + d[i + 2]) / 765, u = x / w, v = y / h;
+    const f = n1(u, v) * 0.5 + n2(u, v) * 0.32 + n3(u, v) * 0.18 + (0.45 - lum) * 0.3;   // вода собирается в швах и выбоинах
+    const k = Math.max(0, Math.min(1, (f - (0.6 - amount * 0.16)) / 0.06));
+    wet[y * w + x] = k;
+    const dark = 1 - k * 0.2;
+    d[i] *= dark * (1 - k * 0.05); d[i + 1] *= dark; d[i + 2] *= dark * (1 + k * 0.06);
+    const sp = Math.min(255, (0.07 + (1 - lum) * 0.1 + k * 0.85) * 255);
+    sd[i] = sd[i + 1] = sd[i + 2] = sp; sd[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  sg.putImageData(simg, 0, 0);
+  return { normal: normalCanvas(canvas, 3.2, (x, y) => wet[y * w + x] * 0.92), spec };
+}
+
 let cache = null;
 export function envTextures() {
   if (cache) return cache;
   const tex = (c) => nearestTexture(c, true);
-  cache = {
-    snow: tex(floorCC0(false)), rock: tex(rockCC0()), blocks: tex(gothicCC0()), metal: tex(metalCC0()),
-    sandbags: tex(sandbags()), bag: tex(bag()), crate: tex(container()), barrel: tex(barrel()), gate: tex(gate()),
-    tiles: tex(floorCC0(true)), hull: tex(hull()), bannerFriend: tex(banner(true)), bannerEnemy: tex(banner(false)),
+  const C = {
+    snow: floorCC0(false), rock: rockCC0(), blocks: gothicCC0(), metal: metalCC0(), sandbags: sandbags(), bag: bag(), crate: container(),
+    barrel: barrel(), gate: gate(), tiles: floorCC0(true), hull: hull(), bannerFriend: banner(true), bannerEnemy: banner(false),
   };
+  const wetA = wetFloor(C.snow, 91, 0.5), wetB = wetFloor(C.tiles, 93, 0.25);
+  cache = {};
+  for (const [k, c] of Object.entries(C)) cache[k] = tex(c);
+  // карты нормалей (N) и блеска (S)
+  const N = { rock: 3.2, blocks: 3.6, metal: 2.6, crate: 2.8, gate: 3, hull: 2.6, bag: 2.2, barrel: 1.6 };
+  for (const [k, st] of Object.entries(N)) cache[k + 'N'] = dataTexture(normalCanvas(C[k], st));
+  cache.snowN = dataTexture(wetA.normal); cache.snowS = dataTexture(wetA.spec);
+  cache.tilesN = dataTexture(wetB.normal); cache.tilesS = dataTexture(wetB.spec);
+  cache.snow.needsUpdate = cache.tiles.needsUpdate = true;
   return cache;
 }
 

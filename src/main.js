@@ -13,6 +13,8 @@ import { Flow } from './flow.js';
 import { Hud } from './hud.js';
 import { initAudio, sfx, audioSettings, music } from './audio.js';
 import { loadSprites, loadTextureImages } from './sprites.js';
+import { createSky } from './sky.js';
+import { PostFX } from './postfx.js';
 
 // Шрифты грузим из скрипта, чтобы они не задерживали старт (нет сети — останутся системные)
 const fontLink = document.createElement('link');
@@ -24,7 +26,7 @@ const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in win
 document.body.classList.toggle('touch', isTouch);
 
 // ---------- Настройки (сохраняются в браузере, если можно) ----------
-const settings = { sens: 1, btnSize: 1, btnAlpha: 0.55, music: true, gyro: false, volume: 1 };
+const settings = { sens: 1, btnSize: 1, btnAlpha: 0.55, music: true, gyro: false, volume: 1, quality: 'auto' };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('ironCrusadeSettings') || '{}')); } catch { /* без сохранения */ }
 function saveSettings() { try { localStorage.setItem('ironCrusadeSettings', JSON.stringify(settings)); } catch { /* нет хранилища */ } }
 function applySettings() {
@@ -35,22 +37,35 @@ function applySettings() {
 applySettings();
 
 // ---------- Рендер: близко к родному разрешению (окружение гладкое, пиксели — в текстурах) ----------
-const RENDER_SCALE = isTouch ? 0.75 : 1;
-const renderer = new THREE.WebGLRenderer({ antialias: !isTouch, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * RENDER_SCALE);
+// Качество графики: low — без постобработки и теней (слабые телефоны); medium — свечение и тени;
+// high — плюс сглаживание, лучи света, тени высокого разрешения. auto: телефон → medium, компьютер → high.
+const QUALITY = {
+  low: { scale: isTouch ? 0.7 : 1, shadow: 0, lights: 2 },
+  medium: { scale: isTouch ? 0.75 : 1, shadow: 1024, lights: 4 },
+  high: { scale: 1, shadow: 2048, lights: 7 },
+};
+const qualityName = () => (QUALITY[settings.quality] ? settings.quality : isTouch ? 'medium' : 'high');
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.autoUpdate = false;       // тени статичны: карта пересчитывается только когда двигаются ворота
 document.getElementById('game').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(78, 1, 0.05, 900);
 camera.rotation.order = 'YXZ';
 const overlay = document.getElementById('overlay');
+const post = new PostFX(renderer);
+post.setOverlay(overlay);
 
 // ---------- Общий контекст игры ----------
-const G = { scene, camera, isTouch, settings };
+const G = { scene, camera, isTouch, settings, renderer, post };
 // запечённые атласы врагов (3D → 8 ракурсов → пиксели) — до постройки уровня и врагов
 await loadTextureImages(['floor', 'metal', 'rust', 'rock', 'cobble']);
 await loadSprites(['fanatic', 'gunner', 'heavy', 'boss', 'w_rifle', 'w_shotgun', 'w_plasma', 'w_thermal', 'w_chainblade', 'w_throw']);
 G.world = new World();
-G.level = buildLevel(scene, G.world);
+G.sky = createSky(scene);
+G.level = buildLevel(scene, G.world, G);
 G.fx = createFX(scene);
 G.input = new Input(isTouch, settings);
 G.player = new Player(G.world);
@@ -232,20 +247,40 @@ document.addEventListener('pointerlockchange', () => {
 renderer.domElement.addEventListener('click', () => { if (game.state === 'playing' && !document.pointerLockElement) lockPointer(); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
-// ---------- Размер окна ----------
+// ---------- Размер окна и качество графики ----------
 function resize() {
-  const w = window.innerWidth, h = window.innerHeight;
+  const w = window.innerWidth, h = window.innerHeight, Q = QUALITY[qualityName()];
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * Q.scale);
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.userData.baseFov = w < h ? 92 : 76;
   camera.updateProjectionMatrix();
-  // пиксельный слой: ~280 "пикселей" по высоте → оружие занимает ~45% кадра, пиксели крупные и чёткие
+  // пиксельный слой: 256 "пикселей" по высоте → оружие занимает ~45% кадра, пиксели крупные и чёткие
   overlay.height = 256;
   overlay.width = Math.round((256 * w) / h);
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  post.setSize(size.x, size.y);
   G.fx.setScale(h * renderer.getPixelRatio());
+  G.sky.setScale(h * renderer.getPixelRatio());
+}
+function applyQuality() {
+  const name = qualityName(), Q = QUALITY[name];
+  post.setQuality(name);
+  document.body.classList.toggle('postfx', post.enabled);
+  const shadows = Q.shadow > 0;
+  if (renderer.shadowMap.enabled !== shadows || G.sky.sun.shadow.mapSize.x !== (Q.shadow || 512)) {
+    renderer.shadowMap.enabled = shadows;
+    G.sky.sun.castShadow = shadows;
+    G.sky.sun.shadow.mapSize.set(Q.shadow || 512, Q.shadow || 512);
+    if (G.sky.sun.shadow.map) { G.sky.sun.shadow.map.dispose(); G.sky.sun.shadow.map = null; }
+    scene.traverse((o) => { if (o.material) for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.needsUpdate = true; });
+  }
+  G.level.setLights(Q.lights);
+  renderer.shadowMap.needsUpdate = true;
+  resize();
 }
 window.addEventListener('resize', resize);
-resize();
+applyQuality();
 
 // ---------- Игровой цикл ----------
 const clock = new THREE.Clock();
@@ -280,6 +315,14 @@ function update(dt) {
   if (P.dead) endGame(false);
 }
 
+// Облёт арены на титульном экране
+function menuCamera(t) {
+  const a = t * 0.07 + 2.2, r = 15.5 + Math.sin(t * 0.11) * 2.5;
+  camera.position.set(Math.sin(a) * r, 4.6 + Math.sin(t * 0.17) * 1.3, 2 + Math.cos(a) * r);
+  camera.lookAt(Math.sin(a + 1.9) * 3, 3.4, -6);
+}
+
+const sunUv = new THREE.Vector2();
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -287,13 +330,29 @@ function frame() {
   if (game.state === 'playing') update(dt);
   else if (game.state === 'won' || game.state === 'dead') G.enemies.update(dt, game.time);
   G.level.update(dt, game.time);
+  if (G.level.shadowsDirty) { renderer.shadowMap.needsUpdate = true; G.level.shadowsDirty = false; }
   G.fx.update(dt, G.world, camera.position, game.time);
-  G.player.applyCamera(camera, game.time);
-  const fov = (camera.userData.baseFov || 76) * (camera.userData.fovK || 1);
+  const P = G.player, inMenu = game.state === 'menu';
+  if (inMenu) menuCamera(game.time); else P.applyCamera(camera, game.time);
+  const fov = inMenu ? 62 : (camera.userData.baseFov || 76) * (camera.userData.fovK || 1);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
-  renderer.render(scene, camera);
+  camera.updateMatrixWorld();
+  G.sky.update(dt, game.time, camera);
   if (game.state === 'playing' || game.state === 'paused') G.weapons.draw(dt, game.time);
   else G.weapons.ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+  // параметры постобработки от состояния игры
+  const fx = post.fx, W = G.weapons, alive = !inMenu && !P.dead;
+  fx.damage = alive ? Math.min(1, P.hurtFlash) : 0;
+  fx.lowHp = alive && P.health < 30 ? 0.5 * (1 - P.health / 30) + 0.15 : game.state === 'dead' ? 0.6 : 0;
+  fx.desat = game.state === 'dead' ? 0.7 : alive && P.health < 30 ? 0.35 * (1 - P.health / 30) : 0;
+  fx.dash += ((alive && P.dashT > 0 ? 1 : 0) - fx.dash) * Math.min(1, dt * 14);
+  fx.flash = Math.max(0, fx.flash - dt * 2.4);
+  fx.weaponBoost = W.flashT > 0 || W.beamOn ? 2.4 : 0;
+  fx.rays = G.sky.sunScreen(camera, sunUv) * 0.6;
+  fx.sunScreen.copy(sunUv);
+  G.level.lightAt(camera.position, fx.weaponTint);
+  post.render(scene, camera, game.time);
 }
 G.player.reset(G.level.playerStart);
 G.pickups.reset();
@@ -302,4 +361,4 @@ G.hud.show(false);
 frame();
 
 // Для отладки из консоли браузера (например: __game.G.player.health = 999)
-window.__game = { G, game, update, THREE, startGame };
+window.__game = { G, game, update, THREE, startGame, applyQuality };
