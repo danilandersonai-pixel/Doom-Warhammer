@@ -101,10 +101,9 @@ G.applyHit = (hit, dmg, dir, source, quiet = false) => {
     if (!quiet) sfx.flesh();
   } else if (hit.barrel) {
     G.pickups.damageBarrel(hit.barrel, dmg);
-    G.fx.sparks.burst(hit.point, 6, 0xffc060, { speed: 4, life: 0.3, size: 0.06 });
+    G.fx.sparks.burst(hit.point, 6, 0xffc060, { speed: 4, life: 0.3, size: 0.06, hdr: 3 });
   } else if (!quiet) {
-    G.fx.sparks.burst(hit.point, 9, 0xffc060, { speed: 6, life: 0.3, gravity: 8, dir: hit.normal, spread: 0.7, size: 0.06 });
-    G.fx.dust.burst(hit.point, 6, 0xd8dee8, { speed: 2, life: 0.8, gravity: 3, dir: hit.normal, spread: 0.7, size: 0.18, alpha: 0.8 }); // снежная/каменная пыль
+    G.fx.impact(hit.point, hit.normal);     // выбоина с раскалённой кромкой, искры, пыль
   }
 };
 
@@ -327,7 +326,7 @@ function menuCamera(t) {
 const sunUv = new THREE.Vector2();
 function frame() {
   requestAnimationFrame(frame);
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const dt = G.fx.scaleTime(Math.min(clock.getDelta(), 0.05));   // миг остановки при мощном ударе, замедление при гибели босса
   game.time += dt;
   if (game.state === 'playing') update(dt);
   else if (game.state === 'won' || game.state === 'dead') G.enemies.update(dt, game.time);
