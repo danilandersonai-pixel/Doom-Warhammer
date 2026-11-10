@@ -41,8 +41,8 @@ applySettings();
 // high — плюс сглаживание, лучи света, тени высокого разрешения. auto: телефон → medium, компьютер → high.
 const QUALITY = {
   low: { scale: isTouch ? 0.7 : 1, shadow: 0, lights: 2 },
-  medium: { scale: isTouch ? 0.75 : 1, shadow: 1024, lights: 4 },
-  high: { scale: 1, shadow: 2048, lights: 7 },
+  medium: { scale: isTouch ? 0.75 : 1, shadow: 1024, lights: 5 },
+  high: { scale: 1, shadow: 2048, lights: 8 },
 };
 const qualityName = () => (QUALITY[settings.quality] ? settings.quality : isTouch ? 'medium' : 'high');
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
@@ -420,9 +420,10 @@ function menuCamera(t) {
 const sunUv = new THREE.Vector2();
 function frame() {
   requestAnimationFrame(frame);
-  const dt = G.fx.scaleTime(Math.min(clock.getDelta(), 0.05));   // миг остановки при мощном ударе, замедление при гибели босса
+  const rawDt = Math.min(clock.getDelta(), 0.05);
+  const dt = G.fx.scaleTime(rawDt);   // миг остановки при мощном ударе, замедление при гибели босса
   game.time += dt;
-  watchPerformance(dt);
+  watchPerformance(rawDt);
   if (game.state === 'playing') update(dt);
   else if (game.state === 'won' || game.state === 'dead') G.enemies.update(dt, game.time);
   G.level.update(dt, game.time);

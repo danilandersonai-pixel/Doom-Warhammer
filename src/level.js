@@ -504,8 +504,8 @@ export function buildLevel(scene, world, G) {
     contactShadow(px0, pz0, 3.2, 3.2);
     for (let k = 0; k < 6; k++) {                                   // раскрытые лепестки-аппарели и тормозные стойки
       const a = k * (Math.PI / 3), cx = px0 + Math.sin(a) * 2.2, cz = pz0 + Math.cos(a) * 2.2;
-      if (cz > 33.6) continue;
-      deco(box(1.3, 0.1, 1.9, 2), M.hull, mtxOf(cx, 0.16, cz, 0.12, a, 0), { tint: livery });
+      if (cz > 33.6 || k === 3) continue;
+      deco(box(1.3, 0.1, 1.9, 2), M.hull, mtxOf(cx, 0.16, cz, 0.12, a, 0), { tint: [1.1, 0.46, 0.4] });
       deco(box(0.12, 0.12, 1.5, 1), M.iron, mtxOf(px0 + Math.sin(a) * 1.7, 0.7, pz0 + Math.cos(a) * 1.7, -0.7, a, 0));
     }
     deco(box(0.9, 1.7, 0.08, 1), M.iron, mtxOf(px0, 1.3, pz0 - 1.3));               // открытый люк: тёмный проём
@@ -749,9 +749,8 @@ export function buildLevel(scene, world, G) {
   const corpseSprite = (type, x, z, flip) => {
     const sh = SPRITES[type], t2 = spriteTexture(sh);
     setSpriteFrame(t2, sh, 'death', sh.meta.anims.death.frames - 1, flip ? 2 : 6);
-    const m = new THREE.Mesh(spriteGeometry(sh), new THREE.MeshLambertMaterial({ map: t2, alphaTest: 0.5, side: THREE.DoubleSide, emissive: 0x5a5252, emissiveMap: t2 }));
+    const m = new THREE.Mesh(spriteGeometry(sh), new THREE.MeshBasicMaterial({ map: t2, alphaTest: 0.5, side: THREE.DoubleSide }));
     m.position.set(x, -0.02, z);
-    m.receiveShadow = true;
     scene.add(m);
     staticDecal(x, z, 2.2);
     return m;
@@ -788,7 +787,7 @@ export function buildLevel(scene, world, G) {
     contactShadow(x, z, 0.5, 0.5, y);
     fire(x, y + 1.46, z, 1.25);
   };
-  for (const [x, y, z] of [[-4, 0, 19.2], [4, 0, 19.2], [-4.5, PH, -11.9], [4.5, PH, -11.9], [-19, 0, -19], [19, 0, -19], [-3.6, PH, -19.2], [3.6, PH, -19.2]]) brazier(x, y, z);
+  for (const [x, y, z] of [[-5.6, 0, 27.6], [5.6, 0, 25.4], [-4, 0, 19.2], [4, 0, 19.2], [-4.5, PH, -11.9], [4.5, PH, -11.9], [-19, 0, -19], [19, 0, -19], [-3.6, PH, -19.2], [3.6, PH, -19.2]]) brazier(x, y, z);
   fire(-15.4, 2.6, -10.5, 1.5); fire(-14, 1.8, -8.8, 1.0); fire(-16.4, 1.6, -11.6, 0.8); fire(10.6, 0, 3.4, 0.8); fire(-2.6, 0, 24.6, 0.9); fire(2.6, 0, -5, 0.7); fire(-12.6, 0, 12.4, 0.7);
 
   // свечи: гроздья у лестницы, на парапете, в тайнике, у стен
@@ -880,7 +879,7 @@ export function buildLevel(scene, world, G) {
   // ---------------- Свет от огня: настоящие точечные источники в ключевых местах ----------------
   const fireLights = [];
   for (const [x, y, z, power, dist, color] of [
-    [0, 2.9, 18.2, 80, 17, 0xff8a3c], [0, PH + 2.7, -11.0, 80, 17, 0xff8a3c], [16.5, -0.4, 0, 110, 15, 0xff5216], [0, PH + 3.0, -18.2, 70, 15, 0xff8a3c],
+    [0, 2.9, 18.2, 80, 17, 0xff8a3c], [0, 3.4, 26.6, 95, 16, 0xff8a3c], [0, PH + 2.7, -11.0, 80, 17, 0xff8a3c], [16.5, -0.4, 0, 110, 15, 0xff5216], [0, PH + 3.0, -18.2, 70, 15, 0xff8a3c],
     [-14.6, 3.4, -9.6, 70, 14, 0xff7a30], [-19, 2.6, -19, 46, 13, 0xff8a3c], [19, 2.6, -19, 46, 13, 0xff8a3c],
   ]) {
     const l = new THREE.PointLight(color, power, dist, 2);
@@ -923,6 +922,9 @@ export function buildLevel(scene, world, G) {
     if (out) out.setRGB(0.6 + s * 0.5 + f * 0.7, 0.68 + s * 0.34 + f * 0.32, 0.86 + s * 0.06);
     return s;
   }
+
+  // тела-декорации получают цвет местного света один раз (они неподвижны)
+  for (const c of corpses) { lightAt(c.position, c.material.color); c.material.color.multiplyScalar(0.72); }
 
   // ---------------- Анимация: огонь, знамёна, лампады, расплав, печать ----------------
   const api = { shadowsDirty: true };

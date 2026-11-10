@@ -340,7 +340,7 @@ function gothicStone() {
   const T = canvasRGBA(128, 128), R = rng(51), n = noise2(53);
   for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
     const v = 0.5 + (fbm(n, x / 8, y / 8) - 0.5) * 0.5 + (fbm(n, x / 40, y / 40 + 5) - 0.5) * 0.35;
-    const c = mix(hex('#30323e'), hex('#9498aa'), clamp(v, 0, 1));
+    const c = mix(hex('#3c3e4c'), hex('#a8acbe'), clamp(v, 0, 1));
     T.set(x, y, c[0], c[1], c[2]);
   }
   // горизонтальные пояса-карнизы сверху и снизу
@@ -453,7 +453,7 @@ function gothicCC0() {
   if (!img) return base;
   const g = base.getContext('2d');
   g.globalCompositeOperation = 'multiply';
-  g.globalAlpha = 0.45;
+  g.globalAlpha = 0.36;
   g.filter = 'grayscale(1) contrast(1.4)';
   g.drawImage(img, 0, 0, base.width, base.height);
   g.filter = 'none';
