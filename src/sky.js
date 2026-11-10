@@ -440,6 +440,43 @@ export function createSky(scene) {
   const ash = ashField(700, [44, 18, 44]);
   scene.add(ash);
 
+  // ----- молнии: ветвящийся разряд (ломаная лента, строится заново при каждом ударе) -----
+  const BOLT_SEG = 64;
+  const boltGeo = new THREE.BufferGeometry();
+  boltGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(BOLT_SEG * 6 * 3), 3));
+  const boltMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(5, 6.5, 10), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide });
+  const boltMesh = new THREE.Mesh(boltGeo, boltMat);
+  boltMesh.frustumCulled = false;
+  boltMesh.visible = false;
+  boltMesh.renderOrder = -84;
+  far.add(boltMesh);
+  function buildBolt(az, elev) {
+    const P = boltGeo.attributes.position.array;
+    let n = 0;
+    const side = new THREE.Vector3(-Math.sin(az), 0, Math.cos(az));         // вбок от луча зрения
+    const seg = (a, b, w) => {
+      if (n >= BOLT_SEG) return;
+      const o = n * 18, wx = side.x * w, wz = side.z * w;
+      P.set([a.x - wx, a.y, a.z - wz, a.x + wx, a.y, a.z + wz, b.x + wx, b.y, b.z + wz, a.x - wx, a.y, a.z - wz, b.x + wx, b.y, b.z + wz, b.x - wx, b.y, b.z - wz], o);
+      n++;
+    };
+    const branch = (from, len, steps, w, lean) => {
+      let p = from.clone();
+      for (let i = 0; i < steps; i++) {
+        const q = p.clone();
+        q.y -= len / steps;
+        q.addScaledVector(side, (Math.random() - 0.5) * len * 0.16 + lean * len / steps);
+        seg(p, q, w * (1 - i / steps * 0.5));
+        if (w > 1.2 && Math.random() < 0.22 && i > 1) branch(q, len * (0.25 + Math.random() * 0.25), 5, w * 0.45, (Math.random() - 0.5) * 1.6);
+        p = q;
+      }
+    };
+    const r = 300, top = new THREE.Vector3(Math.cos(az) * r, Math.tan(elev) * r, Math.sin(az) * r);
+    branch(top, top.y - 12, 14, 2.4, 0);
+    for (let i = n * 18; i < P.length; i++) P[i] = 0;
+    boltGeo.attributes.position.needsUpdate = true;
+  }
+
   // ----- молнии -----
   const L = { t: 5 + Math.random() * 6, flash: 0, seq: [], onStrike: null };
   const hemiBase = hemi.intensity, hemiCol = hemi.color.clone(), fogBase = fogCol.clone();
@@ -476,7 +513,9 @@ export function createSky(scene) {
     if (L.t <= 0) {
       L.t = 7 + Math.random() * 13;
       const a = Math.random() * 6.283;
-      skyMat.uniforms.uFlashDir.value.set(Math.cos(a), 0.25 + Math.random() * 0.4, Math.sin(a)).normalize();
+      const elev = 0.3 + Math.random() * 0.35;
+      skyMat.uniforms.uFlashDir.value.set(Math.cos(a), Math.tan(elev), Math.sin(a)).normalize();
+      buildBolt(a, elev + 0.1);
       L.seq = [[0, 1], [0.07, 0.15], [0.13, 0.85], [0.3, 0.3]];
       L.age = 0;
       if (L.onStrike) L.onStrike(0.6 + Math.random() * 1.6);
@@ -488,6 +527,8 @@ export function createSky(scene) {
     L.flash *= Math.exp(-9 * dt);
     const fl = L.flash < 0.003 ? 0 : L.flash;
     skyMat.uniforms.uFlash.value = fl;
+    boltMesh.visible = fl > 0.12;
+    boltMat.opacity = Math.min(1, fl * 1.4);
     hemi.intensity = hemiBase + fl * 2.2;
     hemi.color.copy(hemiCol).lerp(bolt, Math.min(1, fl));
     scene.fog.color.copy(fogBase).lerp(bolt, fl * 0.3);
