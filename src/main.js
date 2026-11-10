@@ -134,12 +134,13 @@ G.damageArea = (p, radius, dmg, source, except = null, quiet = false) => {
 G.hurtPlayer = (amount, from) => {
   if (game.state !== 'playing' || amount <= 0) return;
   G.player.damage(amount);
-  G.hud.hurt();
+  G.hud.hurt(from, amount);      // from — точка в мире, откуда пришёл урон (для указателя направления)
   sfx.hurt();
 };
 
 G.onEnemyKilled = (e) => {
   game.stats.kills++;
+  if (G.hud.kill) G.hud.kill(e);
   if (e.type !== 'boss') G.pickups.drop(e);
 };
 G.onBossPhase = (phase) => G.flow.onBossPhase(phase);
@@ -281,6 +282,7 @@ function applyQuality() {
 }
 window.addEventListener('resize', resize);
 applyQuality();
+G.applyQuality = applyQuality;   // вызвать после смены settings.quality ('auto' | 'low' | 'medium' | 'high')
 
 // ---------- Игровой цикл ----------
 const clock = new THREE.Clock();
