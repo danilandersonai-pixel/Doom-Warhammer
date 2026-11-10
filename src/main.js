@@ -65,6 +65,7 @@ await loadTextureImages(['floor', 'metal', 'rust', 'rock', 'cobble']);
 await loadSprites(['fanatic', 'gunner', 'heavy', 'boss', 'w_rifle', 'w_shotgun', 'w_plasma', 'w_thermal', 'w_chainblade', 'w_throw']);
 G.world = new World();
 G.sky = createSky(scene);
+G.sky.lightning.onStrike = (delay) => sfx.thunder(delay, 0.5 + Math.random() * 0.5);
 G.level = buildLevel(scene, G.world, G);
 G.fx = createFX(scene);
 G.input = new Input(isTouch, settings);
@@ -249,9 +250,12 @@ renderer.domElement.addEventListener('click', () => { if (game.state === 'playin
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
 
 // ---------- Размер окна и качество графики ----------
+// Адаптивное разрешение: если кадр считается слишком долго, плавно снижаем разрешение рендера (до 55%),
+// а если и этого мало — ступень качества. Интерфейс и пиксельные спрайты при этом остаются чёткими.
+const perf = { k: 1, acc: 0, n: 0, slow: 0, auto: !navigator.webdriver };
 function resize() {
   const w = window.innerWidth, h = window.innerHeight, Q = QUALITY[qualityName()];
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * Q.scale);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * Q.scale * perf.k);
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.userData.baseFov = w < h ? 92 : 76;
@@ -268,6 +272,7 @@ function applyQuality() {
   const name = qualityName(), Q = QUALITY[name];
   post.setQuality(name);
   document.body.classList.toggle('postfx', post.enabled);
+  G.sky.setMask(post.enabled);
   const shadows = Q.shadow > 0;
   if (renderer.shadowMap.enabled !== shadows || G.sky.sun.shadow.mapSize.x !== (Q.shadow || 512)) {
     renderer.shadowMap.enabled = shadows;
@@ -279,6 +284,22 @@ function applyQuality() {
   G.level.setLights(Q.lights);
   renderer.shadowMap.needsUpdate = true;
   resize();
+}
+function watchPerformance(dt) {
+  if (!perf.auto || game.state !== 'playing') return;
+  perf.acc += dt; perf.n++;
+  if (perf.acc < 2.5) return;
+  const avg = perf.acc / perf.n;
+  perf.acc = 0; perf.n = 0;
+  if (avg > 1 / 42) {
+    if (perf.k > 0.56) { perf.k = Math.max(0.55, perf.k - 0.15); resize(); }
+    else if (++perf.slow >= 2) {
+      // разрешение уже минимальное — опускаем качество на ступень
+      const name = qualityName(), next = name === 'high' ? 'medium' : name === 'medium' ? 'low' : null;
+      perf.slow = 0;
+      if (next) { settings.quality = next; perf.k = 0.85; applyQuality(); G.hud.pickupMsg(next === 'low' ? 'Графика: низкое качество (для плавности)' : 'Графика: среднее качество (для плавности)'); }
+    }
+  } else if (avg < 1 / 57 && perf.k < 1) { perf.slow = 0; perf.k = Math.min(1, perf.k + 0.1); resize(); }
 }
 window.addEventListener('resize', resize);
 applyQuality();
@@ -319,9 +340,9 @@ function update(dt) {
 
 // Облёт арены на титульном экране
 function menuCamera(t) {
-  const a = t * 0.07 + 2.2, r = 15.5 + Math.sin(t * 0.11) * 2.5;
-  camera.position.set(Math.sin(a) * r, 4.6 + Math.sin(t * 0.17) * 1.3, 2 + Math.cos(a) * r);
-  camera.lookAt(Math.sin(a + 1.9) * 3, 3.4, -6);
+  const a = t * 0.045 + 0.6;
+  camera.position.set(Math.sin(a) * 11.5, 3.3 + Math.sin(t * 0.11) * 1.3, 8.5 + Math.cos(a * 0.8) * 7);
+  camera.lookAt(Math.sin(a * 0.6 + 1) * 3.5, 7.2, -20);
 }
 
 const sunUv = new THREE.Vector2();
@@ -329,6 +350,7 @@ function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 0.05);
   game.time += dt;
+  watchPerformance(dt);
   if (game.state === 'playing') update(dt);
   else if (game.state === 'won' || game.state === 'dead') G.enemies.update(dt, game.time);
   G.level.update(dt, game.time);

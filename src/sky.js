@@ -103,7 +103,7 @@ void main() {
 const SKY_FRAG = `
 precision highp float;
 uniform sampler2D tNoise; uniform vec3 uSunDir; uniform float uTime; uniform float uFlash; uniform vec3 uFlashDir;
-uniform vec3 uHorizon; uniform vec3 uMid; uniform vec3 uZenith;
+uniform vec3 uHorizon; uniform vec3 uMid; uniform vec3 uZenith; uniform float uAlpha;
 varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
@@ -152,7 +152,7 @@ void main() {
   vec3 haze = uHorizon + vec3(1.0, 0.42, 0.14) * pow(sdp, 3.0) * 0.32;
   col = mix(col, haze, smoothstep(0.16, -0.01, h));
   col = mix(col, uHorizon * 0.55, smoothstep(0.0, -0.3, h));
-  gl_FragColor = vec4(col, 0.0);   // альфа 0 — «это небо» (маска для лучей света)
+  gl_FragColor = vec4(col, uAlpha);   // альфа 0 — «это небо» (маска для лучей света); без постобработки — 1
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -350,7 +350,7 @@ export function createSky(scene) {
   const skyMat = new THREE.ShaderMaterial({
     uniforms: {
       tNoise: { value: noise }, uSunDir: { value: SUN_DIR }, uTime: { value: 0 }, uFlash: { value: 0 }, uFlashDir: { value: new THREE.Vector3(0, 0.3, 1) },
-      uHorizon: { value: fogCol.clone() }, uMid: { value: new THREE.Color(0x2a3558) }, uZenith: { value: new THREE.Color(0x0b0e1e) },
+      uAlpha: { value: 0 }, uHorizon: { value: fogCol.clone() }, uMid: { value: new THREE.Color(0x2a3558) }, uZenith: { value: new THREE.Color(0x0b0e1e) },
     },
     vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false,
   });
@@ -496,6 +496,7 @@ export function createSky(scene) {
   return {
     sun, hemi, sunDir: SUN_DIR, lightning: L, update,
     setScale: (h) => { ash.material.uniforms.uScale.value = h * 0.6; },
+    setMask: (on) => { skyMat.uniforms.uAlpha.value = on ? 0 : 1; },   // маска неба нужна только постобработке
     // экранное положение светила (0..1) и видимость — для лучей света
     sunScreen(camera, out) {
       const v = _v.copy(SUN_DIR).multiplyScalar(500).add(camera.position).project(camera);

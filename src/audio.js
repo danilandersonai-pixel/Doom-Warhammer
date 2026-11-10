@@ -76,6 +76,12 @@ function tone({ dur, vol, type = 'sine', f0, f1, delay = 0, attack = 0.005, dest
 const V = (v) => v * (settings.volume ?? 1);
 
 export const sfx = {
+  // раскат грома после молнии: delay — секунды до звука (расстояние до грозы)
+  thunder(delay = 1, v = 1) {
+    noise({ dur: 0.3, vol: V(0.16 * v), type: 'bandpass', f0: 900, f1: 220, q: 0.6, delay });
+    noise({ dur: 1.7, vol: V(0.34 * v), f0: 170, f1: 38, delay: delay + 0.05, attack: 0.05 });
+    noise({ dur: 1.6, vol: V(0.2 * v), f0: 110, f1: 30, delay: delay + 0.9, attack: 0.3 });
+  },
   shot(kind) {
     if (kind === 'rifle') {
       noise({ dur: 0.14, vol: V(0.9), f0: 4500, f1: 400 });
