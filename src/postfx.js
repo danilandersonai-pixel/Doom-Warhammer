@@ -192,7 +192,7 @@ export class PostFX {
 
     // состояние, которым управляет игра
     this.fx = {
-      exposure: 1.25, damage: 0, lowHp: 0, dash: 0, flash: 0, flashColor: new THREE.Color(1, 0.9, 0.7), desat: 0, ca: 0,
+      exposure: 1.12, damage: 0, lowHp: 0, dash: 0, flash: 0, flashColor: new THREE.Color(1, 0.9, 0.7), desat: 0, ca: 0,
       weaponBoost: 0, weaponTint: new THREE.Color(1, 1, 1), sunScreen: new THREE.Vector2(0.5, 0.5), rays: 0,
     };
     this.overlayTex = null;

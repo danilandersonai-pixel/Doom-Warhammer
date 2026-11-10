@@ -62,6 +62,8 @@ THREE.ShaderChunk.fog_fragment = `
 #endif`;
 
 // ---------- Тайловый шум для облаков (R и G — два независимых слоя) ----------
+let noiseCache = null;
+export function noiseTex() { return noiseCache || (noiseCache = noiseTexture()); }
 function noiseTexture(size = 256) {
   const R = rng(77);
   const layer = (octaves) => {
@@ -329,9 +331,9 @@ export function createSky(scene) {
   scene.fog = new THREE.FogExp2(FOG_COLOR, FOG_DENSITY);
 
   // ----- свет -----
-  const hemi = new THREE.HemisphereLight(0xa6b3d2, 0x4e4244, 2.0);
+  const hemi = new THREE.HemisphereLight(0xaab6d4, 0x5c4e52, 2.7);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffc896, 5.2);
+  const sun = new THREE.DirectionalLight(0xffc896, 5.6);
   sun.position.copy(SUN_DIR).multiplyScalar(90).add(new THREE.Vector3(0, 0, 3));
   sun.target.position.set(0, 0, 3);
   sun.castShadow = true;
@@ -344,7 +346,7 @@ export function createSky(scene) {
   scene.add(sun, sun.target);
 
   // ----- купол неба -----
-  const noise = noiseTexture();
+  const noise = noiseTex();
   const skyMat = new THREE.ShaderMaterial({
     uniforms: {
       tNoise: { value: noise }, uSunDir: { value: SUN_DIR }, uTime: { value: 0 }, uFlash: { value: 0 }, uFlashDir: { value: new THREE.Vector3(0, 0.3, 1) },

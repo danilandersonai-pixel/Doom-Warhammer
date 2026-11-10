@@ -382,7 +382,7 @@ function container() {
   const T = canvasRGBA(128, 128), R = rng(61), n = noise2(63);
   for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
     const v = 0.5 + (fbm(n, x / 9, y / 9) - 0.5) * 0.45;
-    const c = mix(hex('#1e2a24'), hex('#4e6250'), v);
+    const c = mix(hex('#2c3c36'), hex('#6c8672'), v);
     T.set(x, y, c[0], c[1], c[2]);
   }
   const gold = (x, y, k = 1) => { const c = mix(hex('#6a4a1c'), hex('#d8a648'), k); T.set(x, y, c[0], c[1], c[2]); };
