@@ -271,7 +271,13 @@ export class PostFX {
     }
     const R = this.rts, fx = this.fx;
     const useOverlay = !!this.overlayTex;
-    if (useOverlay) this.overlayTex.needsUpdate = true;
+    if (useOverlay) {
+      // Память под текстуру выделяется один раз под размер холста. Холст меняет размер вместе с окном —
+      // тогда текстуру нужно освободить, иначе видеокарта отклоняет каждую загрузку и оружие пропадает.
+      const c = this.overlayCanvas;
+      if (c.width !== this.ovW || c.height !== this.ovH) { this.overlayTex.dispose(); this.ovW = c.width; this.ovH = c.height; }
+      this.overlayTex.needsUpdate = true;
+    }
     const ovTex = useOverlay ? this.overlayTex : this.blank;
 
     // 1) сцена → HDR-буфер
