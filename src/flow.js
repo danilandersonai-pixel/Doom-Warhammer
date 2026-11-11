@@ -41,6 +41,7 @@ export class Flow {
     this.G.level.gates.exit.set(false);
     this.G.hud.objective('Вход на площадь найден. Зачисти её от еретиков.', 'Иди к воротам площади');
     music.setIntensity(0);
+    this.G.sky.resetMood();
   }
 
   get remaining() { return this.queue.length + this.G.enemies.alive.filter((e) => e.type !== 'boss').length; }
@@ -67,6 +68,7 @@ export class Flow {
     G.hud.objective(i === 0 ? 'Врата заперты за нами. Еретики идут — прими бой!' : i === 1 ? 'Вторая волна. Среди них — тяжёлый демон. Не стой на месте.' : 'Последняя волна перед их чемпионом. Держись!', `Волна ${i + 1} из 3`);
     sfx.horn();
     music.setIntensity(1);
+    G.sky.setMood([0.14, 0.3, 0.46][i]);            // с каждой волной затмение багровеет
   }
 
   startBoss() {
@@ -77,6 +79,9 @@ export class Flow {
     G.hud.objective('Колосс пробудился! Бей в пылающее сердце, держись подальше от клешни.', 'Сокруши Колосса');
     sfx.bossRoar();
     music.setIntensity(2);
+    G.sky.setMood(0.68);
+    G.sky.strike();                                  // Колосс является под удар молнии
+    G.fx.screenFlash(0.5, 0xc8d8ff);
   }
 
   update(dt) {
@@ -114,6 +119,8 @@ export class Flow {
         this.nextWave = this.wave + 1;
         G.hud.banner(this.wave < 2 ? 'ВОЛНА ОТБИТА' : 'ТИШИНА…', 2);
         music.setIntensity(0.4);
+        G.fx.slowmo(0.3, 0.6);                         // последний враг волны падает в замедлении
+        G.fx.screenFlash(0.22, 0xffe2b0);
         if (this.wave === 1) {
           // после второй волны — новое оружие в центре
           G.pickups.add('weapon:thermal', 0, 0, 2.5);
@@ -132,6 +139,9 @@ export class Flow {
 
   onBossDead() {
     const G = this.G;
+    // затмение кончается: луна сходит со светила, площадь заливает утренний свет
+    G.sky.setMood(0);
+    G.sky.setDawn(1);
     setTimeout(() => {
       if (this.stage !== 'boss') return;
       this.stage = 'exit';
@@ -145,6 +155,8 @@ export class Flow {
 
   onBossPhase(phase) {
     const G = this.G;
+    G.sky.setMood(phase === 3 ? 1 : 0.84);            // чем злее Колосс, тем багровее небо
+    G.sky.strike();
     if (phase === 2) G.hud.objective('Колосс зовёт фанатиков и бьёт ракетами! Ищи укрытие.', 'Колосс: фаза 2');
     if (phase === 3) G.hud.objective('Он в ярости! Добей его, пока он не испепелил площадь!', 'Колосс: фаза 3');
   }

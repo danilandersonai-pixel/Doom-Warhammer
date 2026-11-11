@@ -99,6 +99,27 @@ export function stainedGlass(kind = 0, seed = 1) {
   return T.done();
 }
 
+// Разбитый витраж: в стекле неровная дыра, от неё расходятся трещины; по краям арки остаются осколки
+export function brokenGlass(src, seed = 1) {
+  const W = src.width, H = src.height, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0);
+  const img = g.getImageData(0, 0, W, H), d = img.data, R = rng(seed * 13 + 5);
+  const cx = W / 2, cy = H * 0.56, N = 14, rad = [];
+  for (let i = 0; i < N; i++) rad.push(0.62 + R() * 0.38);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dx = (x - cx) / (W * 0.46), dy = (y - cy) / (H * 0.4), r = Math.hypot(dx, dy);
+    const a = (Math.atan2(dy, dx) / (Math.PI * 2) + 0.5) * N, i0 = Math.floor(a) % N, f = a - Math.floor(a);
+    const edge = rad[i0] * (1 - f) + rad[(i0 + 1) % N] * f - Math.abs(f - 0.5) * 0.22;   // зубчатый край
+    const i = (y * W + x) * 4;
+    if (r < edge) d[i + 3] = 0;
+    else if (r < edge + 0.07 || Math.abs(f - 0.5) > 0.47) { d[i] *= 0.3; d[i + 1] *= 0.3; d[i + 2] *= 0.34; }   // кромка и трещины
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
 // ---------- Окно-роза (128×128): лепестки, кольца, каменные переплёты ----------
 export function roseWindow() {
   const S = 128, T = px(S, S), c = S / 2 - 0.5, N = 12;

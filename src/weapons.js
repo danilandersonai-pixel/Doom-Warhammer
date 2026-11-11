@@ -351,8 +351,16 @@ export class Weapons {
     const [cw, ch] = sheet.meta.cell, viewX = sheet === this.sheets.throw ? 0 : sheet === this.sheets.chainblade ? 120 : 176;
     // покачивание при ходьбе, отставание в прыжке, лёгкое «дыхание»
     const bob = P.speed01 * (P.onGround ? 1 : 0.3);
-    const x = Math.round((OW - 560) / 2 + viewX + Math.cos(P.bob) * 6 * bob);
-    const y = Math.round(OH - ch + 4 + Math.abs(Math.sin(P.bob)) * 6 * bob + Math.sin(time * 1.7) * 1.2 + Math.max(-8, Math.min(10, P.vel.y * -0.8)));
+    // инерция: при повороте камеры оружие чуть отстаёт и догоняет — руки ощущаются «весомыми»
+    if (dt > 0) {
+      const dyaw = Math.atan2(Math.sin(P.yaw - (this.lastYaw ?? P.yaw)), Math.cos(P.yaw - (this.lastYaw ?? P.yaw))), dpitch = P.pitch - (this.lastPitch ?? P.pitch);
+      this.lastYaw = P.yaw; this.lastPitch = P.pitch;
+      const k = Math.min(1, dt * 11);
+      this.swayX = (this.swayX || 0) + (Math.max(-18, Math.min(18, (dyaw / dt) * 2.4)) - (this.swayX || 0)) * k;
+      this.swayY = (this.swayY || 0) + (Math.max(-12, Math.min(12, (dpitch / dt) * 2.2)) - (this.swayY || 0)) * k;
+    }
+    const x = Math.round((OW - 560) / 2 + viewX + Math.cos(P.bob) * 6 * bob + (this.swayX || 0));
+    const y = Math.round(OH - ch + 4 + Math.abs(Math.sin(P.bob)) * 6 * bob + Math.sin(time * 1.7) * 1.2 + Math.max(-8, Math.min(10, P.vel.y * -0.8)) + (this.swayY || 0));
     const [sx, sy] = this.frameOf(sheet, anim, f);
     if (sheet.meta.muzzle && sheet === this.sheets[k]) this.muzzleNdc.set(((x + sheet.meta.muzzle[0] * cw) / OW) * 2 - 1, 1 - ((y + sheet.meta.muzzle[1] * ch) / OH) * 2);
     const flashLit = (this.flashT > 0 || this.beamOn) && this.swingT < 0 && !this.def.melee;

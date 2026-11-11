@@ -449,3 +449,21 @@ body:not(.touch) .touchOnly { display: none; }
 /* виньетка: только без постобработки (иначе её рисует шейдер) */
 #vignette { position: fixed; inset: 0; pointer-events: none;
   background: radial-gradient(ellipse 75% 70% at 50% 45%, rgba(255, 190, 120, 0.05) 0%, rgba(0, 0, 0, 0) 55%, rgba(30, 26, 52, 0.28) 85%, rgba(12, 10, 24, 0.55) 100%); }
+
+/* ---------- вступление: высадка в капсуле ---------- */
+#cine { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+.cineBar { position: absolute; left: 0; right: 0; height: 11vh; background: #000; transition: transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.cineBar.top { top: 0; }
+.cineBar.bottom { bottom: 0; }
+#cineTitle {
+  position: absolute; left: max(6vw, var(--safe-l)); bottom: 17vh; display: flex; flex-direction: column; gap: 0.4vh;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7), 0 0 18px rgba(0, 0, 0, 0.6); animation: cineIn 2.4s ease-out both;
+}
+#cineTitle .chapter { font-family: var(--display); font-size: clamp(13px, 2.6vh, 22px); letter-spacing: 0.5em; text-transform: uppercase; color: var(--ember); }
+#cineTitle .name { font-family: var(--display); font-size: clamp(26px, 7vh, 64px); letter-spacing: 0.08em; text-transform: uppercase; color: var(--bone); line-height: 1; }
+#cineSkip { position: absolute; right: max(4vw, var(--safe-r)); bottom: 3.6vh; font-size: clamp(11px, 2vh, 15px); letter-spacing: 0.2em; text-transform: uppercase; color: rgba(242, 236, 223, 0.5); }
+@keyframes cineIn { 0% { opacity: 0; transform: translateX(-2vw); } 25% { opacity: 1; transform: none; } 100% { opacity: 1; } }
+#cine.out .cineBar.top { transform: translateY(-101%); }
+#cine.out .cineBar.bottom { transform: translateY(101%); }
+#cine.out #cineTitle, #cine.out #cineSkip { opacity: 0; transition: opacity 0.35s; animation: none; }
+@media (prefers-reduced-motion: reduce) { #cineTitle { animation: none; } }

@@ -87,6 +87,7 @@ void main() {
 
 const FRAG_FINAL = COMMON + `
 uniform sampler2D tScene; uniform sampler2D tBloom; uniform sampler2D tRays; uniform sampler2D tOverlay;
+uniform sampler2D tStreak; uniform sampler2D tMask; uniform vec2 uSun; uniform float uAspect, uStreak, uFlare;
 uniform vec2 uRes; uniform float uTime;
 uniform float uExposure, uBloom, uRays, uVignette, uGrain, uSaturation, uContrast, uCA;
 uniform float uOverlayOn, uOverlayBoost, uDamage, uLowHp, uDash, uFlash, uDesat;
@@ -121,6 +122,21 @@ void main() {
   vec3 bloom = texture2D(tBloom, vUv).rgb;
   float rays = texture2D(tRays, vUv).r * uRays;
   hdr += bloom * uBloom + uRayColor * rays;
+  // анаморфные блики: яркие огни тянутся в горизонтальные холодные штрихи, как в киношной оптике
+  if (uStreak > 0.001) {
+    vec3 st = vec3(0.0);
+    for (int i = -4; i <= 4; i++) st += texture2D(tStreak, vUv + vec2(float(i) * 0.034, 0.0)).rgb * (1.0 - abs(float(i)) * 0.2);
+    hdr += st * 0.2 * uStreak * vec3(0.5, 0.7, 1.0);
+  }
+  // блики объектива от светила: цепочка «призраков» вдоль оси светило → центр кадра (если светило не за стеной)
+  if (uFlare > 0.001) {
+    float vis = texture2D(tMask, clamp(uSun, vec2(0.02), vec2(0.98))).a;
+    vec2 axis = vec2(0.5) - uSun, asp = vec2(uAspect, 1.0);
+    // два мягких пятна далеко за центром кадра — не мешают целиться
+    float d1 = length((vUv - (uSun + axis * 1.55)) * asp), d2 = length((vUv - (uSun + axis * 2.2)) * asp);
+    vec3 fl = vec3(0.55, 0.75, 1.0) * smoothstep(0.055, 0.0, d1) * 0.16 + vec3(1.0, 0.8, 0.55) * smoothstep(0.11, 0.0, d2) * 0.1;
+    hdr += fl * uFlare * vis;
+  }
   hdr += uFlashColor * uFlash;
   vec3 col = aces(hdr);
 
@@ -184,6 +200,7 @@ export class PostFX {
     this.mRays = mat(FRAG_RAYS, { tBright: U(null), uSun: U(new THREE.Vector2(0.5, 0.5)), uAspect: U(1), uTime: U(0), uDisc: U(0.06) });
     this.mFinal = mat(FRAG_FINAL, {
       tScene: U(null), tBloom: U(null), tRays: U(null), tOverlay: U(null), uRes: U(new THREE.Vector2()), uTime: U(0),
+      tStreak: U(null), tMask: U(null), uSun: U(new THREE.Vector2(0.5, 0.5)), uAspect: U(1), uStreak: U(0), uFlare: U(0),
       uExposure: U(1), uBloom: U(0.9), uRays: U(0), uVignette: U(0.4), uGrain: U(0.016), uSaturation: U(1.08), uContrast: U(1.06), uCA: U(0.0012),
       uOverlayOn: U(0), uOverlayBoost: U(0), uDamage: U(0), uLowHp: U(0), uDash: U(0), uFlash: U(0), uDesat: U(0),
       uRayColor: U(new THREE.Color(1.0, 0.72, 0.42)), uShadowTint: U(new THREE.Color(0.93, 0.97, 1.06)), uHighTint: U(new THREE.Color(1.06, 1.0, 0.92)),
@@ -193,7 +210,7 @@ export class PostFX {
     // состояние, которым управляет игра
     this.fx = {
       exposure: 1.12, damage: 0, lowHp: 0, dash: 0, flash: 0, flashColor: new THREE.Color(1, 0.9, 0.7), desat: 0, ca: 0,
-      weaponBoost: 0, weaponTint: new THREE.Color(1, 1, 1), sunScreen: new THREE.Vector2(0.5, 0.5), rays: 0,
+      weaponBoost: 0, weaponTint: new THREE.Color(1, 1, 1), sunScreen: new THREE.Vector2(0.5, 0.5), rays: 0, rayDisc: 1, flare: 0,
     };
     this.overlayTex = null;
     this.blank = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
@@ -311,13 +328,17 @@ export class PostFX {
     const raysOn = this.quality === 'high' && fx.rays > 0.01;
     if (raysOn) {
       u = this.mRays.uniforms;
-      u.tBright.value = R.bright.texture; u.uSun.value.copy(fx.sunScreen); u.uAspect.value = this.w / this.h; u.uTime.value = time % 10; u.uDisc.value = 0.078 / (camera.fov * Math.PI / 180);
+      u.tBright.value = R.bright.texture; u.uSun.value.copy(fx.sunScreen); u.uAspect.value = this.w / this.h; u.uTime.value = time % 10; u.uDisc.value = (0.078 / (camera.fov * Math.PI / 180)) * fx.rayDisc;
       this.pass(this.mRays, R.rays);
     }
 
     // 5) сведение на экран
     u = this.mFinal.uniforms;
     u.tScene.value = R.scene.texture; u.tBloom.value = acc.texture; u.tRays.value = R.rays.texture; u.tOverlay.value = ovTex;
+    const high = this.quality === 'high';
+    u.tStreak.value = (R.up[Math.min(2, R.down.length - 2)] || acc).texture; u.tMask.value = R.bright.texture;
+    u.uSun.value.copy(fx.sunScreen); u.uAspect.value = this.w / this.h;
+    u.uStreak.value = high ? 1 : 0; u.uFlare.value = high ? fx.flare : 0;
     u.uRes.value.set(this.w, this.h); u.uTime.value = time % 1000;
     u.uExposure.value = fx.exposure; u.uBloom.value = 0.16 * (this.hdr ? 1 : 1.6); u.uRays.value = raysOn ? fx.rays : 0;
     u.uOverlayOn.value = useOverlay ? 1 : 0; u.uOverlayBoost.value = fx.weaponBoost;

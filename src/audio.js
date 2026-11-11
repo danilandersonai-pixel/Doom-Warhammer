@@ -76,6 +76,17 @@ function tone({ dur, vol, type = 'sine', f0, f1, delay = 0, attack = 0.005, dest
 const V = (v) => v * (settings.volume ?? 1);
 
 export const sfx = {
+  // рёв входящей в атмосферу капсулы: нарастающий шум и падающий свист (длится ~sec секунд)
+  dropPod(sec = 2.8) {
+    noise({ dur: sec * 0.62, vol: V(0.12), type: 'bandpass', f0: 240, f1: 900, q: 0.7, attack: sec * 0.3 });
+    noise({ dur: sec * 0.6, vol: V(0.3), f0: 500, f1: 2600, delay: sec * 0.42, attack: sec * 0.4 });
+    tone({ dur: sec, vol: V(0.07), type: 'sawtooth', f0: 520, f1: 70, attack: sec * 0.5 });
+  },
+  // звон разбитого витража
+  glass(v = 1) {
+    noise({ dur: 0.5, vol: V(0.26 * v), type: 'highpass', f0: 3200, f1: 5200, q: 0.8 });
+    for (let i = 0; i < 5; i++) tone({ dur: 0.18 + Math.random() * 0.25, vol: V(0.05 * v), type: 'triangle', f0: 1800 + Math.random() * 3200, delay: Math.random() * 0.22 });
+  },
   // раскат грома после молнии: delay — секунды до звука (расстояние до грозы)
   thunder(delay = 1, v = 1) {
     noise({ dur: 0.3, vol: V(0.16 * v), type: 'bandpass', f0: 900, f1: 220, q: 0.6, delay });

@@ -104,6 +104,7 @@ const SKY_FRAG = `
 precision highp float;
 uniform sampler2D tNoise; uniform vec3 uSunDir; uniform float uTime; uniform float uFlash; uniform vec3 uFlashDir;
 uniform vec3 uHorizon; uniform vec3 uMid; uniform vec3 uZenith; uniform float uAlpha;
+uniform float uMood; uniform float uDawn; uniform vec3 uMoonDir;
 varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
@@ -112,7 +113,8 @@ void main() {
   vec3 col = mix(uHorizon, uMid, smoothstep(-0.02, 0.2, h));
   col = mix(col, uZenith, smoothstep(0.12, 0.8, h));
   // тёплое зарево вокруг светила
-  col += vec3(1.0, 0.46, 0.2) * (pow(sdp, 4.0) * 0.2 + pow(sdp, 30.0) * 0.3);
+  vec3 warm = mix(vec3(1.0, 0.46, 0.2), vec3(1.0, 0.1, 0.05), uMood);            // зарево: золото → кровь
+  col += warm * (pow(sdp, 4.0) * (0.2 + uMood * 0.22 + uDawn * 0.08) + pow(sdp, 30.0) * (0.3 - uDawn * 0.12));
 
   // затмение: чёрный диск, пылающая корона со «стримерами», яркое кольцо
   float ang = acos(clamp(sd, -1.0, 1.0));
@@ -123,11 +125,19 @@ void main() {
   float st2 = texture2D(tNoise, vec2(pa * 8.0 + 0.3, 0.37 - uTime * 0.011)).r;
   float edge = max(ang - R, 0.0);
   float corona = exp(-edge * (13.0 + st * 44.0)) * (0.5 + st2 * 1.0);
-  float ring = exp(-pow((ang - R) / 0.0055, 2.0));
-  float bead = exp(-pow(distance(vec2(pa, ang), vec2(0.19, R)) / 0.012, 2.0));
-  float disc = smoothstep(R - 0.006, R + 0.001, ang);
-  vec3 sun = vec3(1.0, 0.62, 0.3) * corona * 4.2 + vec3(1.0, 0.88, 0.7) * ring * 6.0 + vec3(1.0, 0.95, 0.9) * bead * 14.0;
-  col = col * mix(0.04, 1.0, disc) + sun * disc;
+  float ring = exp(-pow((ang - R) / 0.0055, 2.0)) * (1.0 - uDawn);
+  float bead = exp(-pow(distance(vec2(pa, ang), vec2(0.19, R)) / 0.012, 2.0)) * (1.0 - uDawn);
+  // диск луны уходит со светила, когда затмение кончается: сначала серп, потом всё солнце
+  float angM = acos(clamp(dot(d, uMoonDir), -1.0, 1.0));
+  float moon = smoothstep(R - 0.006, R + 0.001, angM);
+  float sunDisc = smoothstep(R * 0.94 + 0.004, R * 0.94 - 0.003, ang);
+  vec3 cCor = mix(vec3(1.0, 0.62, 0.3), vec3(1.0, 0.17, 0.08), uMood);
+  vec3 cRing = mix(vec3(1.0, 0.88, 0.7), vec3(1.0, 0.4, 0.26), uMood);
+  vec3 sun = cCor * corona * (4.2 + uMood * 2.2) * (1.0 - uDawn * 0.82) + cRing * ring * 6.0 + vec3(1.0, 0.95, 0.9) * bead * 14.0
+           + vec3(1.0, 0.84, 0.58) * sunDisc * 2.6;
+  float moonDark = mix(mix(0.04, 1.0, moon), 1.0, smoothstep(0.55, 1.0, uDawn));  // на дневном небе новолуние не видно
+  col = col * moonDark + sun * moon;
+  float disc = moon;
 
   // облака: два слоя шума на «потолке», ползут в разные стороны
   vec2 cuv = d.xz / (max(h, 0.0) + 0.16);
@@ -137,14 +147,17 @@ void main() {
   float n3 = texture2D(tNoise, cuv * 0.37 + w * 3.3).r;
   float dens = n1 * 0.56 + n2 * 0.29 + n3 * 0.15;
   float nearSun = pow(sdp, 22.0);
-  float cover = smoothstep(0.36 + nearSun * 0.26, 0.6 + nearSun * 0.26, dens);
+  float clear = nearSun * 0.26 + uDawn * 0.17;
+  float cover = smoothstep(0.36 + clear, 0.6 + clear, dens);
   float thick = smoothstep(0.47, 0.74, dens);
   float thin = cover * (1.0 - thick);
   vec3 cc = mix(vec3(0.2, 0.215, 0.29), vec3(0.04, 0.045, 0.07), thick);
   cc += vec3(0.32, 0.2, 0.2) * thin * (0.5 + 0.5 * n3) * (0.35 + 0.65 * smoothstep(-0.4, 0.6, sd));          // закатный румянец кромок
-  cc += vec3(1.5, 0.82, 0.4) * thin * (pow(sdp, 3.0) * 0.4 + pow(sdp, 14.0) * 0.9);   // золотая кайма у светила
+  cc += mix(vec3(1.5, 0.82, 0.4), vec3(1.7, 0.3, 0.16), uMood) * thin * (pow(sdp, 3.0) * 0.4 + pow(sdp, 14.0) * 0.9);   // кайма у светила: золото → кровь
   cc += vec3(0.22, 0.27, 0.42) * thin * 0.45;
   cc += vec3(0.5, 0.2, 0.1) * thick * pow(sdp, 2.0) * 0.14;
+  cc = mix(cc, cc * vec3(1.5, 0.5, 0.48) + vec3(0.05, 0.0, 0.0), uMood * 0.75);          // багровые тучи
+  cc = mix(cc, cc * 2.6 + vec3(0.3, 0.24, 0.18), uDawn);                                 // светлые облака рассвета
   cc += uFlash * vec3(0.8, 0.9, 1.25) * (0.18 + pow(max(dot(d, uFlashDir), 0.0), 3.0) * 3.0) * (0.35 + thin * 1.4);
   col = mix(col, cc + sun * disc * 0.12, cover * smoothstep(0.0, 0.14, h) * 0.94);
 
@@ -350,7 +363,7 @@ export function createSky(scene) {
   const skyMat = new THREE.ShaderMaterial({
     uniforms: {
       tNoise: { value: noise }, uSunDir: { value: SUN_DIR }, uTime: { value: 0 }, uFlash: { value: 0 }, uFlashDir: { value: new THREE.Vector3(0, 0.3, 1) },
-      uAlpha: { value: 0 }, uHorizon: { value: fogCol.clone() }, uMid: { value: new THREE.Color(0x2a3558) }, uZenith: { value: new THREE.Color(0x0b0e1e) },
+      uAlpha: { value: 0 }, uMood: { value: 0 }, uDawn: { value: 0 }, uMoonDir: { value: SUN_DIR.clone() }, uHorizon: { value: fogCol.clone() }, uMid: { value: new THREE.Color(0x2a3558) }, uZenith: { value: new THREE.Color(0x0b0e1e) },
     },
     vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false,
   });
@@ -479,8 +492,33 @@ export function createSky(scene) {
 
   // ----- молнии -----
   const L = { t: 5 + Math.random() * 6, flash: 0, seq: [], onStrike: null };
-  const hemiBase = hemi.intensity, hemiCol = hemi.color.clone(), fogBase = fogCol.clone();
   const bolt = new THREE.Color(0.75, 0.85, 1.2);
+
+  // ----- настроение неба: 0 — затмение, mood 1 — кровавое затмение (ярость босса), dawn 1 — затмение ушло -----
+  // Каждая величина задана тройкой [обычное, кровавое, рассвет]; сцена плавно перетекает между ними.
+  const C = (h) => new THREE.Color(h);
+  const PAL = {
+    sun: [C(0xffc896), C(0xff7048), C(0xfff0d8)], sky: [C(0xaab6d4), C(0xb48ca4), C(0xcfe0ff)], ground: [C(0x5c4e52), C(0x5e3038), C(0x8e8072)],
+    fog: [C(FOG_COLOR), C(0x57344a), C(0x7c8eb4)], mid: [C(0x2a3558), C(0x3a1830), C(0x4670b4)], zen: [C(0x0b0e1e), C(0x12050c), C(0x183a7c)],
+  };
+  const NUM = { sun: [5.6, 5.4, 9.2], hemi: [2.7, 2.5, 3.5], fog: [FOG_DENSITY, FOG_DENSITY * 1.08, FOG_DENSITY * 0.6] };
+  const M = { mood: 0, moodTo: 0, dawn: 0, dawnTo: 0 };
+  const mixC = (out, a) => out.copy(a[0]).lerp(a[1], M.mood).lerp(a[2], M.dawn);
+  const mixN = (a) => (a[0] + (a[1] - a[0]) * M.mood) * (1 - M.dawn) + a[2] * M.dawn;
+  const hemiCol = new THREE.Color(), fogBase = new THREE.Color();
+  const moonSide = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), SUN_DIR).normalize();
+  const moonUp = new THREE.Vector3().crossVectors(SUN_DIR, moonSide);
+  function applyMood() {
+    mixC(sun.color, PAL.sun); sun.intensity = mixN(NUM.sun);
+    mixC(hemiCol, PAL.sky); mixC(hemi.groundColor, PAL.ground);
+    mixC(fogBase, PAL.fog); scene.fog.density = mixN(NUM.fog);
+    const u = skyMat.uniforms;
+    u.uHorizon.value.copy(fogBase); mixC(u.uMid.value, PAL.mid); mixC(u.uZenith.value, PAL.zen);
+    u.uMood.value = M.mood * (1 - M.dawn); u.uDawn.value = M.dawn;
+    const k = M.dawn * M.dawn * (3 - 2 * M.dawn) * 0.3;            // луна сползает вверх-влево
+    u.uMoonDir.value.copy(SUN_DIR).addScaledVector(moonSide, -k * 0.75).addScaledVector(moonUp, k * 0.66).normalize();
+  }
+  applyMood();
 
   function update(dt, time, camera) {
     dome.position.copy(camera.position);
@@ -509,7 +547,14 @@ export function createSky(scene) {
       f.s.visible = true;
     }
     // молния: двойная вспышка в облаках, на мгновение высвечивает сцену холодным светом
-    L.t -= dt;
+    // настроение неба течёт к цели
+    if (M.mood !== M.moodTo || M.dawn !== M.dawnTo) {
+      M.mood += (M.moodTo - M.mood) * Math.min(1, dt * 0.7);
+      if (Math.abs(M.moodTo - M.mood) < 0.002) M.mood = M.moodTo;
+      M.dawn += Math.sign(M.dawnTo - M.dawn) * Math.min(Math.abs(M.dawnTo - M.dawn), dt / 9);
+      applyMood();
+    }
+    L.t -= dt * (1 + M.mood * 1.6);
     if (L.t <= 0) {
       L.t = 7 + Math.random() * 13;
       const a = Math.random() * 6.283;
@@ -529,13 +574,20 @@ export function createSky(scene) {
     skyMat.uniforms.uFlash.value = fl;
     boltMesh.visible = fl > 0.12;
     boltMat.opacity = Math.min(1, fl * 1.4);
-    hemi.intensity = hemiBase + fl * 2.2;
+    hemi.intensity = mixN(NUM.hemi) + fl * 2.2;
     hemi.color.copy(hemiCol).lerp(bolt, Math.min(1, fl));
     scene.fog.color.copy(fogBase).lerp(bolt, fl * 0.3);
   }
 
   return {
     sun, hemi, sunDir: SUN_DIR, lightning: L, update,
+    // настроение: mood 0..1 — насколько «кровавое» затмение; dawn 0..1 — затмение уходит, наступает рассвет
+    setMood: (v) => { M.moodTo = v; },
+    setDawn: (v) => { M.dawnTo = v; },
+    resetMood: () => { M.mood = M.moodTo = 0; M.dawn = M.dawnTo = 0; applyMood(); },
+    get dawn() { return M.dawn; },
+    get mood() { return M.mood; },
+    strike: () => { L.t = 0; },                                    // молния прямо сейчас
     setScale: (h) => { ash.material.uniforms.uScale.value = h * 0.6; },
     setMask: (on) => { skyMat.uniforms.uAlpha.value = on ? 0 : 1; },   // маска неба нужна только постобработке
     // экранное положение светила (0..1) и видимость — для лучей света

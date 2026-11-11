@@ -9,7 +9,7 @@ import { SPRITES, spriteTexture, setSpriteFrame, spriteGeometry } from './sprite
 import { miscArt, haloCanvas } from './art_misc.js';
 import { nearestTexture, rng, noise2 } from './pixel.js';
 import { SUN_DIR, noiseTex } from './sky.js';
-import { fireSheet, stainedGlass, roseWindow, sigil, carpet, shaftCanvas, poolCanvas, chainCanvas } from './art_env.js';
+import { fireSheet, stainedGlass, brokenGlass, roseWindow, sigil, carpet, shaftCanvas, poolCanvas, chainCanvas } from './art_env.js';
 
 // Коробка, у которой UV растянуты по размеру (texScale метров на один повтор текстуры)
 function boxGeo(w, h, d, texScale) {
@@ -95,6 +95,14 @@ export function buildLevel(scene, world, G) {
     wax: new THREE.MeshLambertMaterial({ color: 0xd8cdb4, emissive: 0x3a2a14 }),
     carpet: new THREE.MeshLambertMaterial({ map: tex(carpet(), true), vertexColors: true }),
   };
+  for (const m of [M.snow, M.tiles]) {
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.tWetBig = { value: noiseTex() };
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform sampler2D tWetBig;')
+        .replace('#include <specularmap_fragment>', '#include <specularmap_fragment>\n#ifdef USE_FOG\n  specularStrength *= smoothstep(0.36, 0.6, texture2D(tWetBig, vFogWorld.xz * 0.012).r) * 1.3;\n#endif');
+    };
+  }
   const capMat = M.snow; // верхние грани — каменные плиты
   const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
   const mtxOf = (x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) => new THREE.Matrix4().compose(_p.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), _s.set(sx, sy, sz));
@@ -198,6 +206,13 @@ export function buildLevel(scene, world, G) {
   ground(PIT.minX, 80, PIT.maxZ, 80, 0, M.snow);
   ground(PIT.maxX, 80, PIT.minZ, PIT.maxZ, 0, M.snow);
   world.addPit(PIT.minX, PIT.maxX, PIT.minZ, PIT.maxZ);
+  for (const [x0, x1, z0, z1] of [[-420, 420, -420, -80], [-420, 420, 80, 420], [-420, -80, -80, 80], [80, 420, -80, 80]]) {
+    const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0, 6, 6).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, 0, (z0 + z1) / 2);
+    const P = g.attributes.position, uv = g.attributes.uv, col = [];
+    for (let i = 0; i < P.count; i++) { uv.setXY(i, P.getX(i) / 8, -P.getZ(i) / 8); const k = 0.66 + gn(P.getX(i) / 60, P.getZ(i) / 60) * 0.3; col.push(k, k, k * 1.03); }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    batch.add(g, M.snow, new THREE.Matrix4());
+  }
   // стенки плавильной пропасти уходят вниз к расплаву
   const pitCx = (PIT.minX + PIT.maxX) / 2;
   block(PIT.minX - 0.5, 0, 1, 12, -16, 16, M.rock, { top: M.rock, collide: false, texScale: 4 });
@@ -319,7 +334,11 @@ export function buildLevel(scene, world, G) {
     if (s >= 0.8) emberSpots.push([x, y + 0.9 * s, z]);
   }
 
-  const glass = [0, 1, 2].map((k) => tex(stainedGlass(k, 1)));
+  const glassCv = [0, 1, 2].map((k) => stainedGlass(k, 1));
+  const glass = glassCv.map((c) => tex(c));
+  const brokenMats = glassCv.map((c, k) => new THREE.MeshBasicMaterial({ map: tex(brokenGlass(c, k + 1)), alphaTest: 0.5, color: HDR(1.5, 1.5, 1.5) }));
+  const GLASS_COLS = [[0xff4040, 0xffb040, 0xffe08a], [0x4080ff, 0x80d0ff, 0xf0f6ff], [0xa050ff, 0x40d090, 0xff70a0]];
+  const panes = [];                 // витражи, которые можно разбить выстрелом
   const glassCol = [HDR(1.6, 0.62, 0.22), HDR(0.42, 0.78, 1.7), HDR(1.0, 0.42, 1.5)];
   const glassMats = glass.map((map) => new THREE.MeshBasicMaterial({ map, alphaTest: 0.5, color: HDR(2.3, 2.3, 2.3) }));
   const shaftMats = glassCol.map((c) => addMat(shaftTex, c, 0.34));
@@ -363,6 +382,12 @@ export function buildLevel(scene, world, G) {
       g.position.set(wx, 6.3, wz);
       g.rotation.y = ry;
       scene.add(g);
+      const pane = { mesh: g, kind: S.kind, nx, nz, shaft: null, pool: null, broken: false };
+      g.userData.glass = pane;
+      panes.push(pane);
+      solid.push(g);
+      const [bx, bz] = at(a, 0.014);
+      deco(strip(1.5, 3.3, 0.02), M.iron, mtxOf(bx, 5.75, bz));                                     // тёмный проём за стеклом
       const [sx2, sz2] = at(a, 0.14);
       deco(strip(2.6, 0.22, 0.3), M.blocks, mtxOf(sx2, 3.78, sz2), { tint: [1.12, 1.12, 1.14] });   // подоконник
       if (!S.shafts) continue;
@@ -374,9 +399,10 @@ export function buildLevel(scene, world, G) {
       sh.rotation.set(-0.72, ry, 0);
       sh.renderOrder = 3;
       scene.add(sh);
+      pane.shaft = sh;
       if (S.noPool) continue;
       const [fx2, fz2] = at(a, 5.6);
-      lightPool(fx2, 0.03, fz2, S.along === 'x' ? 3.4 : 7, S.along === 'x' ? 7 : 3.4, glassCol[S.kind], 0.2);
+      pane.pool = lightPool(fx2, 0.03, fz2, S.along === 'x' ? 3.4 : 7, S.along === 'x' ? 7 : 3.4, glassCol[S.kind], 0.2);
     }
   }
   // факелы: кованый держатель, пламя, отсвет на стене
@@ -926,6 +952,35 @@ export function buildLevel(scene, world, G) {
   // тела-декорации получают цвет местного света один раз (они неподвижны)
   for (const c of corpses) { lightAt(c.position, c.material.color); c.material.color.multiplyScalar(0.72); }
 
+  // ---------------- Витражи бьются: осколки цветного стекла, звон, столб света гаснет ----------------
+  function shatter(mesh, point) {
+    const gl = mesh.userData.glass;
+    if (!gl || gl.broken) return false;
+    gl.broken = true;
+    mesh.material = brokenMats[gl.kind];
+    if (gl.shaft) gl.shaft.visible = false;
+    if (gl.pool) gl.pool.visible = false;
+    if (G && G.fx) {
+      const n = new THREE.Vector3(gl.nx, 0.2, gl.nz);
+      const mid = new THREE.Vector3(mesh.position.x + gl.nx * 0.2, mesh.position.y, mesh.position.z + gl.nz * 0.2);
+      for (const c of GLASS_COLS[gl.kind]) {
+        G.fx.sparks.burst(point, 14, c, { speed: 7, life: 1.3, gravity: 12, dir: n, spread: 0.9, size: 0.16, sizeVar: 1.3, hdr: 2.6 });
+        for (const dy of [-1.3, 0, 1.3]) G.fx.sparks.burst(mid.clone().setY(mid.y + dy), 9, c, { speed: 4.5, life: 1.5, gravity: 11, dir: n, spread: 1, size: 0.2, sizeVar: 1.4, hdr: 2.2 });
+      }
+      G.fx.dust.burst(point, 12, 0xc8d0e0, { speed: 3, life: 0.7, gravity: 6, dir: n, spread: 0.8, size: 0.1, alpha: 0.8 });
+      G.fx.lights.flash(point, GLASS_COLS[gl.kind][0], 30, 0.2, 10);
+    }
+    return true;
+  }
+  function resetGlass() {
+    for (const gl of panes) {
+      gl.broken = false;
+      gl.mesh.material = glassMats[gl.kind];
+      if (gl.shaft) gl.shaft.visible = true;
+      if (gl.pool) gl.pool.visible = true;
+    }
+  }
+
   // ---------------- Анимация: огонь, знамёна, лампады, расплав, печать ----------------
   const api = { shadowsDirty: true };
   let emberT = 0, smokeT = 0, sigilK = 0.2;
@@ -976,7 +1031,7 @@ export function buildLevel(scene, world, G) {
   }
 
   return Object.assign(api, {
-    solid, spawnPoints, pickupSpots, barrelSpots, gates, secret, update, PH, setLights, lightAt, sunAt,
+    solid, spawnPoints, pickupSpots, barrelSpots, gates, secret, update, PH, setLights, lightAt, sunAt, shatter, resetGlass,
     playerStart: { x: 0, z: 30, yaw: 0 },
     arenaEnter: (p) => p.z < 18.5 && Math.abs(p.x) < 19,
     exitReached: (p) => p.z < -26,

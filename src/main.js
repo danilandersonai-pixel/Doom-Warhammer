@@ -103,6 +103,8 @@ G.applyHit = (hit, dmg, dir, source, quiet = false) => {
   } else if (hit.barrel) {
     G.pickups.damageBarrel(hit.barrel, dmg);
     G.fx.sparks.burst(hit.point, 6, 0xffc060, { speed: 4, life: 0.3, size: 0.06, hdr: 3 });
+  } else if (hit.object.userData.glass && G.level.shatter(hit.object, hit.point)) {
+    sfx.glass();                            // витраж разлетается цветными осколками
   } else if (!quiet) {
     G.fx.impact(hit.point, hit.normal);     // выбоина с раскалённой кромкой, искры, пыль
   }
@@ -200,7 +202,8 @@ function lockPointer() {
   if (p && p.catch) p.catch(() => {});
 }
 
-function startGame() {
+// withIntro — показать высадку (старт из меню); перезапуск после паузы или гибели идёт сразу в бой
+function startGame(withIntro = false) {
   initAudio();
   G.enemies.clear();
   G.projectiles.clear();
@@ -208,12 +211,82 @@ function startGame() {
   G.player.reset(G.level.playerStart);
   G.weapons.reset();
   G.pickups.reset();
+  G.level.resetGlass();
   G.hud.reset();
   G.flow.reset();
   game.stats = { kills: 0 };
   game.elapsed = 0;
-  resume();
+  if (withIntro) beginIntro(); else resume();
 }
+
+// ---------- Вступление: высадка в десантной капсуле ----------
+// Камера падает с неба к стартовому двору (сначала панорама крепости, потом разгон), удар о землю —
+// и управление переходит к игроку. Любая клавиша, клик или касание пропускают сцену.
+const cine = $('cine');
+const intro = { t: 0, dur: 3.2, k: 0, from: new THREE.Vector3(7, 52, 104), mid: new THREE.Vector3(), to: new THREE.Vector3(), look0: new THREE.Vector3(0, 9, -20), look1: new THREE.Vector3(), look: new THREE.Vector3() };
+function beginIntro() {
+  game.state = 'intro';
+  intro.t = 0; intro.k = 0;
+  screen.classList.add('hidden');
+  G.hud.show(false);
+  $('touch').classList.add('hidden');
+  cine.classList.remove('hidden', 'out');
+  $('cineSkip').textContent = isTouch ? 'коснись — пропустить' : 'любая клавиша — пропустить';
+  G.input.reset();
+  lockPointer();
+  sfx.dropPod(intro.dur);
+}
+function introCamera(dt) {
+  intro.t += dt;
+  const s = Math.min(1, intro.t / intro.dur), P = G.player;
+  const k = s * s * (0.22 + 0.78 * s);                              // сначала обзор сверху, затем падение с разгоном
+  intro.k = k;
+  intro.to.set(P.pos.x, P.pos.y + 1.62, P.pos.z);
+  intro.look1.set(P.pos.x, P.pos.y + 1.62, P.pos.z - 40);
+  // дуга: заход над стенами двора и почти отвесное падение в конце (кривая Безье через точку над двором)
+  intro.mid.set(P.pos.x, P.pos.y + 31, P.pos.z + 1);
+  const a = (1 - k) * (1 - k), b = 2 * k * (1 - k), c = k * k;
+  camera.position.set(intro.from.x * a + intro.mid.x * b + intro.to.x * c, intro.from.y * a + intro.mid.y * b + intro.to.y * c, intro.from.z * a + intro.mid.z * b + intro.to.z * c);
+  camera.lookAt(intro.look.lerpVectors(intro.look0, intro.look1, Math.pow(s, 3)));
+  camera.rotateZ((1 - s) * (1 - s) * 0.28);                          // капсула доворачивается к площади
+  // тряска и раскалённые искры обшивки нарастают к удару
+  const sh = k * 0.35;
+  camera.position.x += (Math.random() - 0.5) * sh; camera.position.y += (Math.random() - 0.5) * sh; camera.position.z += (Math.random() - 0.5) * sh;
+  if (s > 0.25) {
+    const f = intro.look.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    for (let i = 0; i < 2; i++) {
+      const a = Math.random() * 6.283, r = 0.6 + Math.random() * 1.4;
+      intro.look1.copy(camera.position).addScaledVector(f, 5 + Math.random() * 9);
+      intro.look1.x += Math.cos(a) * r; intro.look1.y += Math.sin(a) * r;
+      G.fx.sparks.burst(intro.look1, 1, 0xffa040, { speed: 1, life: 0.35, gravity: 0, size: 0.07, hdr: 3 });
+    }
+  }
+  if (s >= 1) endIntro();
+}
+function endIntro() {
+  if (game.state !== 'intro') return;
+  const P = G.player, p = { x: P.pos.x, y: P.pos.y + 0.15, z: P.pos.z };
+  game.state = 'playing';
+  cine.classList.add('out');
+  setTimeout(() => { if (game.state !== 'intro') cine.classList.add('hidden'); }, 700);
+  G.hud.show(true);
+  $('touch').classList.toggle('hidden', !isTouch);
+  G.input.reset();
+  // удар о землю: вспышка, встряска, кольцо пыли, оружие поднимается в руки
+  P.land = 0.3; P.addTrauma(1);
+  G.weapons.switchT = 1;
+  G.fx.screenFlash(0.85, 0xffd8a8);
+  G.fx.caKick(0.02);
+  G.fx.dust.burst(p, 30, 0x8c8478, { speed: 11, life: 1.1, gravity: 1.5, size: 0.6, sizeVar: 0.6, alpha: 0.4, spread: 1, up: 0.15 });
+  G.fx.sparks.burst(p, 40, 0xffa040, { speed: 9, life: 0.9, gravity: 7, size: 0.07, up: 0.8, hdr: 3 });
+  G.fx.flat.spawn('ring', p, new THREE.Vector3(0, 1, 0), { size: 2, grow: 16, dur: 0.7, color: 0xffb070, gain: 2.2, pow: 1.3, lift: 0.05 });
+  G.fx.lights.flash({ x: p.x, y: 1.5, z: p.z }, 0xffa050, 140, 0.5, 20);
+  sfx.explosion(1);
+  sfx.thunder(0.35, 0.8);
+}
+const skipIntro = () => { if (game.state === 'intro' && intro.t > 0.4) intro.t = intro.dur; };
+window.addEventListener('mousedown', skipIntro);
+window.addEventListener('touchstart', skipIntro, { passive: true });
 
 function resume() {
   initAudio();
@@ -266,13 +339,14 @@ function endGame(won) {
 }
 const ROMAN_RANK = { I: 1, II: 2, III: 3, IV: 4 };
 
-$('screenBtn').addEventListener('click', () => { if (game.state === 'paused') resume(); else startGame(); });
-$('restartBtn').addEventListener('click', () => startGame());
+$('screenBtn').addEventListener('click', () => { if (game.state === 'paused') resume(); else startGame(game.state === 'menu' || game.state === 'won'); });
+$('restartBtn').addEventListener('click', () => startGame(false));
 $('settingsBtn').addEventListener('click', () => openSheet('settings'));
 $('controlsBtn').addEventListener('click', () => openSheet('controls'));
 for (const b of document.querySelectorAll('.sheetClose')) b.addEventListener('click', closeSheets);
 $('menuBtn').addEventListener('click', () => pause());
 window.addEventListener('keydown', (e) => {
+  if (game.state === 'intro') { skipIntro(); return; }
   if (game.state === 'playing') return;
   if (e.code === 'Enter' && e.target && e.target.closest && e.target.closest('button, input')) return;   // Enter на кнопке — её собственный клик
   if (e.code === 'Escape' && screen.classList.contains('sheetOpen')) closeSheets();
@@ -429,9 +503,9 @@ function frame() {
   G.level.update(dt, game.time);
   if (G.level.shadowsDirty) { renderer.shadowMap.needsUpdate = true; G.level.shadowsDirty = false; }
   G.fx.update(dt, G.world, camera.position, game.time);
-  const P = G.player, inMenu = game.state === 'menu';
-  if (inMenu) menuCamera(game.time); else P.applyCamera(camera, game.time);
-  const fov = inMenu ? 62 : (camera.userData.baseFov || 76) * (camera.userData.fovK || 1);
+  const P = G.player, inMenu = game.state === 'menu', inIntro = game.state === 'intro';
+  if (inMenu) menuCamera(game.time); else if (inIntro) introCamera(rawDt); else P.applyCamera(camera, game.time);
+  const fov = inMenu ? 62 : inIntro ? 98 - 22 * intro.k : (camera.userData.baseFov || 76) * (camera.userData.fovK || 1);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   camera.updateMatrixWorld();
   G.sky.update(dt, game.time, camera);
@@ -439,14 +513,19 @@ function frame() {
   else G.weapons.ctx.clearRect(0, 0, overlay.width, overlay.height);
 
   // параметры постобработки от состояния игры
-  const fx = post.fx, W = G.weapons, alive = !inMenu && !P.dead;
+  const fx = post.fx, W = G.weapons, alive = !inMenu && !inIntro && game.state !== 'intro' && !P.dead;
   fx.damage = alive ? Math.min(1, P.hurtFlash) : 0;
   fx.lowHp = alive && P.health < 30 ? 0.5 * (1 - P.health / 30) + 0.15 : game.state === 'dead' ? 0.6 : 0;
   fx.desat = game.state === 'dead' ? 0.7 : alive && P.health < 30 ? 0.35 * (1 - P.health / 30) : 0;
-  fx.dash += ((alive && P.dashT > 0 ? 1 : 0) - fx.dash) * Math.min(1, dt * 14);
+  fx.dash += ((inIntro ? intro.k * 0.9 : alive && P.dashT > 0 ? 1 : 0) - fx.dash) * Math.min(1, dt * 14);
   fx.flash = Math.max(0, fx.flash - dt * 2.4);
   fx.weaponBoost = W.flashT > 0 || W.beamOn ? 2.4 : 0;
-  fx.rays = G.sky.sunScreen(camera, sunUv) * 0.6;
+  // светило: лучи и блики объектива; на рассвете (затмение ушло) они сильнее, а экспозиция чуть ниже
+  const dawn = G.sky.dawn, sunVis = G.sky.sunScreen(camera, sunUv);
+  fx.rays = sunVis * (0.6 - dawn * 0.3);
+  fx.rayDisc = 1 - dawn * 0.5;
+  fx.flare = sunVis * (0.3 + dawn * 0.7);
+  fx.exposure = 1.12 - dawn * 0.17;
   fx.sunScreen.copy(sunUv);
   G.level.lightAt(camera.position, fx.weaponTint);
   post.render(scene, camera, game.time);
@@ -458,4 +537,4 @@ G.hud.show(false);
 frame();
 
 // Для отладки из консоли браузера (например: __game.G.player.health = 999)
-window.__game = { G, game, update, THREE, startGame, applyQuality };
+window.__game = { G, game, update, THREE, startGame: () => startGame(false), startIntro: () => startGame(true), applyQuality };
