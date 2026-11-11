@@ -75,7 +75,7 @@ body = body.replace('<script type="module" src="src/main.js"></script>', '')
 css = (root / 'style.css').read_text()
 
 out = f'''<title>Iron Crusade</title>
-<meta name="theme-color" content="#a9bcd6">
+<meta name="theme-color" content="#0b0c12">
 <style>
 {css}
 </style>

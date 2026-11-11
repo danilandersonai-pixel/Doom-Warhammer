@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="theme-color" content="#a9bcd6">
+  <meta name="theme-color" content="#0b0c12">
   <title>Iron Crusade</title>
   <link rel="stylesheet" href="style.css">
   <!-- Three.js с CDN, фиксированная версия -->
@@ -13,91 +13,191 @@
   </script>
 </head>
 <body>
+  <!-- Эмблема ордена (меч в солнечном круге) — рисуется один раз, дальше используется через <use> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="crBlade" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#fbf6ea"/><stop offset="0.5" stop-color="#d9d4c8"/><stop offset="0.5" stop-color="#9aa3b4"/><stop offset="1" stop-color="#6a7386"/>
+      </linearGradient>
+      <linearGradient id="crBrass" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f4d58a"/><stop offset="0.55" stop-color="#c89a3c"/><stop offset="1" stop-color="#7a5a1c"/>
+      </linearGradient>
+      <radialGradient id="crSun" cx="0.5" cy="0.5" r="0.5">
+        <stop offset="0" stop-color="#ffcf7a"/><stop offset="0.45" stop-color="#ff8a2a"/><stop offset="1" stop-color="#3a1206"/>
+      </radialGradient>
+      <symbol id="crest" viewBox="0 0 100 100">
+        <g fill="url(#crBrass)" stroke="#1a1208" stroke-width="0.8" stroke-linejoin="round">
+          <path d="M50 1 L54 15 L46 15 Z"/><path d="M50 1 L54 15 L46 15 Z" transform="rotate(45 50 50)"/><path d="M50 1 L54 15 L46 15 Z" transform="rotate(90 50 50)"/><path d="M50 1 L54 15 L46 15 Z" transform="rotate(135 50 50)"/>
+          <path d="M50 1 L54 15 L46 15 Z" transform="rotate(180 50 50)"/><path d="M50 1 L54 15 L46 15 Z" transform="rotate(225 50 50)"/><path d="M50 1 L54 15 L46 15 Z" transform="rotate(270 50 50)"/><path d="M50 1 L54 15 L46 15 Z" transform="rotate(315 50 50)"/>
+          <path d="M50 7 L52.6 15 L47.4 15 Z" transform="rotate(22.5 50 50)"/><path d="M50 7 L52.6 15 L47.4 15 Z" transform="rotate(67.5 50 50)"/><path d="M50 7 L52.6 15 L47.4 15 Z" transform="rotate(112.5 50 50)"/><path d="M50 7 L52.6 15 L47.4 15 Z" transform="rotate(157.5 50 50)"/>
+          <path d="M50 7 L52.6 15 L47.4 15 Z" transform="rotate(202.5 50 50)"/><path d="M50 7 L52.6 15 L47.4 15 Z" transform="rotate(247.5 50 50)"/><path d="M50 7 L52.6 15 L47.4 15 Z" transform="rotate(292.5 50 50)"/><path d="M50 7 L52.6 15 L47.4 15 Z" transform="rotate(337.5 50 50)"/>
+        </g>
+        <circle cx="50" cy="50" r="34" fill="#0d0e16" stroke="url(#crBrass)" stroke-width="3.2"/>
+        <circle cx="50" cy="50" r="28.5" fill="url(#crSun)" opacity="0.9"/>
+        <circle cx="50" cy="50" r="28.5" fill="none" stroke="#1a1208" stroke-width="1"/>
+        <!-- меч остриём вниз -->
+        <path d="M46.6 34 L53.4 34 L52.6 84 L50 95 L47.4 84 Z" fill="url(#crBlade)" stroke="#14100c" stroke-width="1.1" stroke-linejoin="round"/>
+        <path d="M33 29.5 L67 29.5 L69 32.2 L67 35 L33 35 L31 32.2 Z" fill="url(#crBrass)" stroke="#14100c" stroke-width="1.1" stroke-linejoin="round"/>
+        <rect x="47.8" y="15" width="4.4" height="15" fill="#3a2a1c" stroke="#14100c" stroke-width="1"/>
+        <path d="M47.8 19 h4.4 M47.8 23 h4.4 M47.8 27 h4.4" stroke="#c89a3c" stroke-width="0.9"/>
+        <circle cx="50" cy="12" r="4.4" fill="url(#crBrass)" stroke="#14100c" stroke-width="1.1"/>
+      </symbol>
+      <!-- ромб-навершие для линеек и полос -->
+      <symbol id="gem" viewBox="0 0 12 12"><path d="M6 0.5 L11.5 6 L6 11.5 L0.5 6 Z" fill="#14100c" stroke="#e8c46a" stroke-width="1.2"/><path d="M6 3.4 L8.6 6 L6 8.6 L3.4 6 Z" fill="#ffb347"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- Экран загрузки: виден, пока грузятся Three.js и атласы; main.js убирает его, когда всё готово -->
+  <div id="loading">
+    <svg class="ldCrest" viewBox="0 0 100 100"><use href="#crest"/></svg>
+    <div class="ldTitle">IRON CRUSADE</div>
+    <div class="ldBar"><i></i></div>
+    <div class="ldText" id="ldText">Орден готовится к высадке…</div>
+  </div>
+  <script>
+    // если игра так и не загрузилась (нет сети для Three.js) — подсказываем причину
+    window.addEventListener('error', function () { var t = document.getElementById('ldText'); if (t) t.textContent = 'Не удалось загрузить игру. Проверь интернет (Three.js грузится с CDN) и обнови страницу.'; }, true);
+    setTimeout(function () { var t = document.getElementById('ldText'); if (t && document.getElementById('loading')) t.textContent = 'Загрузка идёт дольше обычного… Проверь интернет: Three.js грузится с CDN.'; }, 15000);
+  </script>
+
   <!-- 3D-сцена -->
   <div id="game"></div>
-  <!-- Пиксельный слой поверх 3D: оружие в руках, кровь на экране -->
+  <!-- Пиксельный слой поверх 3D: оружие в руках, кровь на экране (при постобработке рисуется шейдером, сам холст скрыт) -->
   <canvas id="overlay"></canvas>
-  <!-- Виньетка и лёгкая цветокоррекция: холодные края, тёплый центр -->
+  <!-- Виньетка — только для режима без постобработки -->
   <div id="vignette"></div>
 
   <!-- Интерфейс -->
   <div id="hud" class="hidden">
     <div id="damage"></div>
-    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
-    <div id="hitmarker"></div>
+    <div id="pickupGlow"></div>
 
-    <!-- Полоса задачи с портретом советника -->
-    <div id="objective">
+    <!-- прицел: четыре штриха расходятся при стрельбе и на бегу -->
+    <div id="crosshair"><i></i><i></i><i></i><i></i><b></b></div>
+    <div id="hitmarker"></div>
+    <!-- дуги-указатели: откуда пришёл урон -->
+    <div id="dmgArcs"><i></i><i></i><i></i><i></i></div>
+
+    <!-- Сообщение советника (оракула ордена) -->
+    <div id="objective" class="dim">
       <div class="advisorFrame"><canvas id="advisor" width="40" height="52"></canvas></div>
-      <div id="objText"></div>
+      <div class="advisorBody"><div class="advisorName">Оракул ордена</div><div id="objText"></div></div>
     </div>
-    <div id="objShort"></div>
-    <div id="banner"></div>
-    <div id="pickupMsg"></div>
+
+    <!-- Верх по центру: короткая задача, прогресс волны, полоса босса или элитного врага -->
+    <div id="topCenter">
+      <div id="objShort"></div>
+      <div id="waveRow" class="hidden"><span id="waveLabel"></span><div id="wavePips"></div></div>
+      <div id="bossbar" class="hidden">
+        <div class="name"><svg viewBox="0 0 12 12"><use href="#gem"/></svg><span id="eliteName">Колосс</span><svg viewBox="0 0 12 12"><use href="#gem"/></svg></div>
+        <div class="bar"><div id="bossLost"></div><div id="bossFill"></div><i class="tick" style="left:30%"></i><i class="tick" style="left:60%"></i></div>
+        <div id="bossPhase"><i></i><i></i><i></i></div>
+      </div>
+    </div>
+
+    <div id="banner"><div class="rule"></div><div id="bannerText"></div><div class="rule"></div></div>
+    <div id="feed"></div>
+    <div id="streak"><b id="streakNum"></b><span id="streakText"></span></div>
 
     <!-- Маркер цели и стрелка у края экрана -->
-    <div id="marker"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 1 L23 12 L12 23 L1 12 Z" fill="#2a2016" stroke="#e8b840" stroke-width="2.5"/><path d="M12 7 L17 12 L12 17 L7 12 Z" fill="#e8b840"/></svg><span id="markerDist"></span></div>
-    <div id="edgeArrow"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M16 3 L6 12 L16 21" fill="none" stroke="#2a1c0a" stroke-width="7" stroke-linejoin="miter"/><path d="M16 3 L6 12 L16 21" fill="none" stroke="#e8b840" stroke-width="4" stroke-linejoin="miter"/></svg></div>
+    <div id="marker"><svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 1 L23 12 L12 23 L1 12 Z" fill="#14100c" stroke="#ffb347" stroke-width="2.4"/><path d="M12 7 L17 12 L12 17 L7 12 Z" fill="#ffb347"/></svg><span id="markerDist"></span></div>
+    <div id="edgeArrow"><svg viewBox="0 0 24 24" width="40" height="40"><path d="M16 3 L6 12 L16 21" fill="none" stroke="#14100c" stroke-width="7" stroke-linejoin="miter"/><path d="M16 3 L6 12 L16 21" fill="none" stroke="#ffb347" stroke-width="4" stroke-linejoin="miter"/></svg></div>
 
-    <!-- Элитный враг: полоса здоровья и имя сверху -->
-    <div id="bossbar" class="hidden"><div class="bar"><div id="bossFill"></div><div id="bossLost"></div></div><div class="name" id="eliteName">КОЛОСС</div></div>
-
-    <!-- Патроны: лаймовая иконка оружия в скобках -->
-    <div id="ammoBox"><div class="bracket"><canvas id="weaponIcon" width="48" height="20"></canvas></div><div class="cnt"><div id="ammoText">30</div><div id="ammoRes">150</div></div></div>
-    <!-- Гранаты -->
-    <div id="grenBox"><span id="grenText">3</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="rgba(20,30,10,0.35)" stroke="#bbde03" stroke-width="1.5" stroke-opacity="0.6"/><circle cx="12" cy="13.5" r="5.5" fill="#bbde03"/><path d="M9.5 13.5h5M12 8.5v10M10 6.5h4v2h-4z" stroke="#2a3a06" stroke-width="1.2"/></svg></div>
-
-    <!-- Нижняя панель: портрет, броня/здоровье числами и двумя полосами -->
+    <!-- Низ: слева — герой (портрет, здоровье, броня, рывок), справа — оружие (патроны, гранаты, слоты) -->
     <div id="bottom">
-      <div id="portraitBox"><canvas id="portrait" width="40" height="40"></canvas></div>
-      <div id="numbers"><div id="armorNum">0</div><div id="healthNum">100</div></div>
-      <svg id="blade" viewBox="0 0 150 40">
-        <defs>
-          <clipPath id="hpClip"><rect id="hpRect" x="0" y="0" width="150" height="40"/></clipPath>
-          <clipPath id="arClip"><rect id="arRect" x="0" y="0" width="150" height="40"/></clipPath>
-        </defs>
-        <polygon points="1,8 118,8 148,20 118,32 1,32" fill="#14100e" fill-opacity="0.85" stroke="#3a3430" stroke-width="2"/>
-        <rect x="5" y="11" width="112" height="7" fill="#1830c8" clip-path="url(#arClip)"/>
-        <rect x="5" y="11" width="112" height="2" fill="#6a84ff" clip-path="url(#arClip)"/>
-        <polygon points="5,22 117,22 135,26 117,29 5,29" fill="#d01a10" clip-path="url(#hpClip)"/>
-        <rect x="5" y="22" width="112" height="2" fill="#ff6a50" clip-path="url(#hpClip)"/>
-        <path d="M118 8 L148 20 L118 32" fill="none" stroke="#7a6a50" stroke-width="2"/>
-      </svg>
-      <div id="dashPip"></div>
+      <div id="vitals">
+        <div id="portraitBox"><canvas id="portrait" width="40" height="40"></canvas></div>
+        <div class="bars">
+          <div class="vrow hp">
+            <svg class="vico" viewBox="0 0 16 16"><path d="M6 1h4v5h5v4h-5v5H6v-5H1V6h5z" fill="#ff5a44" stroke="#14100c" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            <div class="vbar"><i id="hpLag"></i><i id="hpFill"></i><i id="hpOver"></i></div>
+            <span id="healthNum">100</span>
+          </div>
+          <div class="vrow ar">
+            <svg class="vico" viewBox="0 0 16 16"><path d="M2 2h12v6c0 4-3 6-6 7-3-1-6-3-6-7z" fill="#7fd0e8" stroke="#14100c" stroke-width="1.2" stroke-linejoin="round"/></svg>
+            <div class="vbar"><i id="arFill"></i><i id="arOver"></i></div>
+            <span id="armorNum">0</span>
+          </div>
+          <div id="dashPip"><i id="dashFill"></i><em>рывок</em></div>
+        </div>
+      </div>
+
+      <div id="arsenal">
+        <div id="weaponName"></div>
+        <div class="ammoRow">
+          <canvas id="weaponIcon" width="48" height="20"></canvas>
+          <div class="cnt"><div id="ammoText">30</div><div id="ammoRes">150</div></div>
+          <div id="grenBox"><svg viewBox="0 0 24 24"><path d="M9 3h6v3h-2v2.2a7 7 0 1 1-2 0V6H9z" fill="#ffb347" stroke="#14100c" stroke-width="1.4" stroke-linejoin="round"/><path d="M7.2 14.5h9.6M12 9.5v10" stroke="#5a2c08" stroke-width="1.3"/><path d="M15 4h3.5v4" fill="none" stroke="#f2ecdf" stroke-width="1.3"/></svg><span id="grenText">3</span></div>
+        </div>
+        <div id="reloadBar"><i id="reloadFill"></i></div>
+        <div id="slots"></div>
+      </div>
     </div>
+
     <button id="menuBtn" aria-label="Меню"><i></i><i></i><i></i></button>
   </div>
 
   <!-- Сенсорное управление: маленькие контурные кнопки по краям -->
+  <!-- Вступление: высадка в десантной капсуле — кинополосы и титр главы -->
+  <div id="cine" class="hidden">
+    <div class="cineBar top"></div><div class="cineBar bottom"></div>
+    <div id="cineTitle"><span class="chapter">Глава I</span><span class="name">Осквернённая площадь</span></div>
+    <div id="cineSkip">любая клавиша — пропустить</div>
+  </div>
+
   <div id="touch" class="hidden">
     <div id="stickBase"><div id="stickKnob"></div></div>
     <div class="tbtn big" data-act="fire" id="btnFire"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="2.4"/></svg></div>
-    <div class="tbtn pict" data-act="jump" id="btnJump"><svg viewBox="0 0 24 24"><circle cx="13" cy="4" r="2.4" fill="currentColor"/><path d="M12 7l-4 4 3 2-2 6M12 7l3 4 4-1M11 13l5 1 1 5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"/><path d="M4 22h6" stroke="currentColor" stroke-width="1.6" opacity="0.6"/></svg></div>
-    <div class="tbtn pict" data-act="dash" id="btnDash"><svg viewBox="0 0 24 24"><circle cx="15" cy="5" r="2.4" fill="currentColor"/><path d="M14 8l-3 5 4 2-1 6M14 8l5 3M11 13l-5 2" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="square"/><path d="M1 9h6M2 13h4M1 17h5" stroke="currentColor" stroke-width="1.6"/><path d="M19 4c3 3 3 9 0 13" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
-    <div class="tbtn pict" data-act="melee" id="btnMelee"><svg viewBox="0 0 24 24"><path d="M3 21l3-3M5 16l3 3M7 17L19 5l2-2-1 3L8 18" fill="currentColor" stroke="currentColor" stroke-width="1.6"/><path d="M9 13l1 1M11 11l1 1M13 9l1 1M15 7l1 1" stroke="#22300a" stroke-width="1.2"/></svg></div>
-    <div class="tbtn ghost" data-act="grenade" id="btnGrenade"></div>
+    <div class="tbtn pict" data-act="jump" id="btnJump"><svg viewBox="0 0 24 24"><path d="M5 14l7-7 7 7M5 20l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="square"/></svg></div>
+    <div class="tbtn pict" data-act="dash" id="btnDash"><svg viewBox="0 0 24 24"><path d="M5 5l7 7-7 7M12 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="square"/></svg></div>
+    <div class="tbtn pict" data-act="melee" id="btnMelee"><svg viewBox="0 0 24 24"><path d="M3 21l3-3M5 16l3 3M7 17L19 5l2-2-1 3L8 18" fill="currentColor" stroke="currentColor" stroke-width="1.6"/><path d="M9 13l1 1M11 11l1 1M13 9l1 1M15 7l1 1" stroke="#3a1c06" stroke-width="1.2"/></svg></div>
+    <!-- невидимые зоны поверх нижней панели: иконка оружия — смена, патроны — перезарядка, граната — бросок -->
+    <div class="tbtn ghost" data-act="swap" id="btnSwap"></div>
     <div class="tbtn ghost" data-act="reload" id="btnReload"></div>
+    <div class="tbtn ghost" data-act="grenade" id="btnGrenade"></div>
+    <div class="tbtn ghost" data-act="pause" id="btnPause"><i></i><i></i><i></i></div>
   </div>
 
-  <!-- Экраны: меню, пауза с настройками, смерть, завершение -->
-  <div id="screen" class="overlay">
+  <!-- Экраны: титул, пауза, поражение, победа; листы настроек и управления -->
+  <div id="screen" class="overlay" data-mode="menu">
+    <div class="cine top"></div><div class="cine bottom"></div>
     <div class="panel">
+      <svg class="crest" viewBox="0 0 100 100"><use href="#crest"/></svg>
       <h1 id="screenTitle">IRON CRUSADE</h1>
-      <p id="screenSub">прототип</p>
+      <div class="titleRule"><i></i><svg viewBox="0 0 12 12"><use href="#gem"/></svg><p id="screenSub">Глава I · Осквернённая площадь</p><svg viewBox="0 0 12 12"><use href="#gem"/></svg><i></i></div>
       <div id="screenText"></div>
       <div class="buttons">
-        <button id="screenBtn">В БОЙ</button>
+        <button id="screenBtn" class="primary">В БОЙ</button>
         <button id="restartBtn" class="ghost hidden">ЗАНОВО</button>
       </div>
-      <details id="settings">
-        <summary>Настройки</summary>
-        <label>Чувствительность обзора <input id="setSens" type="range" min="0.3" max="2.5" step="0.05"></label>
-        <label>Размер кнопок <input id="setBtnSize" type="range" min="0.7" max="1.5" step="0.05"></label>
-        <label>Прозрачность кнопок <input id="setBtnAlpha" type="range" min="0.2" max="1" step="0.05"></label>
-        <label class="check"><input id="setMusic" type="checkbox"> Музыка</label>
-        <label class="check"><input id="setGyro" type="checkbox"> Гироскоп (наклон телефона двигает прицел)</label>
-      </details>
-      <p id="controlsHelp"></p>
+      <div class="buttons sub">
+        <button id="settingsBtn" class="ghost">НАСТРОЙКИ</button>
+        <button id="controlsBtn" class="ghost">УПРАВЛЕНИЕ</button>
+      </div>
+    </div>
+    <div class="foot" id="screenFoot">прототип · одна арена · около пяти минут боя</div>
+    <div class="foot hintKeys" id="footHint"></div>
+
+    <div id="settings" class="sheet hidden">
+      <h2>Настройки</h2>
+      <div class="field"><span>Качество графики</span>
+        <div class="seg" id="setQuality">
+          <button data-q="auto">Авто</button><button data-q="low">Низкое</button><button data-q="medium">Среднее</button><button data-q="high">Высокое</button>
+        </div>
+      </div>
+      <p class="hint" id="qualityHint"></p>
+      <label class="field"><span>Чувствительность обзора</span><input id="setSens" type="range" min="0.3" max="2.5" step="0.05"></label>
+      <label class="field touchOnly"><span>Размер кнопок</span><input id="setBtnSize" type="range" min="0.7" max="1.5" step="0.05"></label>
+      <label class="field touchOnly"><span>Прозрачность кнопок</span><input id="setBtnAlpha" type="range" min="0.2" max="1" step="0.05"></label>
+      <label class="field check"><input id="setMusic" type="checkbox"><span>Музыка</span></label>
+      <label class="field check touchOnly"><input id="setGyro" type="checkbox"><span>Гироскоп (наклон телефона двигает прицел)</span></label>
+      <div class="buttons"><button class="ghost sheetClose">НАЗАД</button></div>
+    </div>
+
+    <div id="controls" class="sheet hidden">
+      <h2>Управление</h2>
+      <div id="controlsHelp"></div>
+      <div class="buttons"><button class="ghost sheetClose">НАЗАД</button></div>
     </div>
   </div>
 
