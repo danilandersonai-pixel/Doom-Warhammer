@@ -75,6 +75,25 @@ function tone({ dur, vol, type = 'sine', f0, f1, delay = 0, attack = 0.005, dest
 
 const V = (v) => v * (settings.volume ?? 1);
 
+// Шум дождя: зацикленный фильтрованный шум, громкость следует за силой дождя (0..1)
+let rainNodes = null;
+export function rainLevel(v) {
+  if (!ctx) return;
+  if (!rainNodes) {
+    if (v <= 0) return;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf; src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass'; f.frequency.value = 1500;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    src.connect(f).connect(g).connect(out);
+    src.start();
+    rainNodes = { g };
+  }
+  rainNodes.g.gain.setTargetAtTime(v * 0.11 * (settings.volume ?? 1), ctx.currentTime, 0.5);
+}
+
 export const sfx = {
   // рёв входящей в атмосферу капсулы: нарастающий шум и падающий свист (длится ~sec секунд)
   dropPod(sec = 2.8) {

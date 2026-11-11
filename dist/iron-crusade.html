@@ -453,6 +453,24 @@ body:not(.touch) .touchOnly { display: none; }
 #vignette { position: fixed; inset: 0; pointer-events: none;
   background: radial-gradient(ellipse 75% 70% at 50% 45%, rgba(255, 190, 120, 0.05) 0%, rgba(0, 0, 0, 0) 55%, rgba(30, 26, 52, 0.28) 85%, rgba(12, 10, 24, 0.55) 100%); }
 
+/* ---------- вступление: высадка в капсуле ---------- */
+#cine { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+.cineBar { position: absolute; left: 0; right: 0; height: 11vh; background: #000; transition: transform 0.55s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.cineBar.top { top: 0; }
+.cineBar.bottom { bottom: 0; }
+#cineTitle {
+  position: absolute; left: max(6vw, var(--safe-l)); bottom: 17vh; display: flex; flex-direction: column; gap: 0.4vh;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7), 0 0 18px rgba(0, 0, 0, 0.6); animation: cineIn 2.4s ease-out both;
+}
+#cineTitle .chapter { font-family: var(--display); font-size: clamp(13px, 2.6vh, 22px); letter-spacing: 0.5em; text-transform: uppercase; color: var(--ember); }
+#cineTitle .name { font-family: var(--display); font-size: clamp(26px, 7vh, 64px); letter-spacing: 0.08em; text-transform: uppercase; color: var(--bone); line-height: 1; }
+#cineSkip { position: absolute; right: max(4vw, var(--safe-r)); bottom: 3.6vh; font-size: clamp(11px, 2vh, 15px); letter-spacing: 0.2em; text-transform: uppercase; color: rgba(242, 236, 223, 0.5); }
+@keyframes cineIn { 0% { opacity: 0; transform: translateX(-2vw); } 25% { opacity: 1; transform: none; } 100% { opacity: 1; } }
+#cine.out .cineBar.top { transform: translateY(-101%); }
+#cine.out .cineBar.bottom { transform: translateY(101%); }
+#cine.out #cineTitle, #cine.out #cineSkip { opacity: 0; transition: opacity 0.35s; animation: none; }
+@media (prefers-reduced-motion: reduce) { #cineTitle { animation: none; } }
+
 </style>
 <script type="importmap">
   { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
@@ -582,6 +600,13 @@ body:not(.touch) .touchOnly { display: none; }
   </div>
 
   <!-- Сенсорное управление: маленькие контурные кнопки по краям -->
+  <!-- Вступление: высадка в десантной капсуле — кинополосы и титр главы -->
+  <div id="cine" class="hidden">
+    <div class="cineBar top"></div><div class="cineBar bottom"></div>
+    <div id="cineTitle"><span class="chapter">Глава I</span><span class="name">Осквернённая площадь</span></div>
+    <div id="cineSkip">любая клавиша — пропустить</div>
+  </div>
+
   <div id="touch" class="hidden">
     <div id="stickBase"><div id="stickKnob"></div></div>
     <div class="tbtn big" data-act="fire" id="btnFire"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5" stroke="currentColor" stroke-width="2.4"/></svg></div>
@@ -2148,6 +2173,7 @@ const SKY_FRAG = `
 precision highp float;
 uniform sampler2D tNoise; uniform vec3 uSunDir; uniform float uTime; uniform float uFlash; uniform vec3 uFlashDir;
 uniform vec3 uHorizon; uniform vec3 uMid; uniform vec3 uZenith; uniform float uAlpha;
+uniform float uMood; uniform float uDawn; uniform vec3 uMoonDir;
 varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
@@ -2156,7 +2182,8 @@ void main() {
   vec3 col = mix(uHorizon, uMid, smoothstep(-0.02, 0.2, h));
   col = mix(col, uZenith, smoothstep(0.12, 0.8, h));
   // тёплое зарево вокруг светила
-  col += vec3(1.0, 0.46, 0.2) * (pow(sdp, 4.0) * 0.2 + pow(sdp, 30.0) * 0.3);
+  vec3 warm = mix(vec3(1.0, 0.46, 0.2), vec3(1.0, 0.1, 0.05), uMood);            // зарево: золото → кровь
+  col += warm * (pow(sdp, 4.0) * (0.2 + uMood * 0.22 + uDawn * 0.08) + pow(sdp, 30.0) * (0.3 - uDawn * 0.12));
 
   // затмение: чёрный диск, пылающая корона со «стримерами», яркое кольцо
   float ang = acos(clamp(sd, -1.0, 1.0));
@@ -2167,11 +2194,19 @@ void main() {
   float st2 = texture2D(tNoise, vec2(pa * 8.0 + 0.3, 0.37 - uTime * 0.011)).r;
   float edge = max(ang - R, 0.0);
   float corona = exp(-edge * (13.0 + st * 44.0)) * (0.5 + st2 * 1.0);
-  float ring = exp(-pow((ang - R) / 0.0055, 2.0));
-  float bead = exp(-pow(distance(vec2(pa, ang), vec2(0.19, R)) / 0.012, 2.0));
-  float disc = smoothstep(R - 0.006, R + 0.001, ang);
-  vec3 sun = vec3(1.0, 0.62, 0.3) * corona * 4.2 + vec3(1.0, 0.88, 0.7) * ring * 6.0 + vec3(1.0, 0.95, 0.9) * bead * 14.0;
-  col = col * mix(0.04, 1.0, disc) + sun * disc;
+  float ring = exp(-pow((ang - R) / 0.0055, 2.0)) * (1.0 - uDawn);
+  float bead = exp(-pow(distance(vec2(pa, ang), vec2(0.19, R)) / 0.012, 2.0)) * (1.0 - uDawn);
+  // диск луны уходит со светила, когда затмение кончается: сначала серп, потом всё солнце
+  float angM = acos(clamp(dot(d, uMoonDir), -1.0, 1.0));
+  float moon = smoothstep(R - 0.006, R + 0.001, angM);
+  float sunDisc = smoothstep(R * 0.94 + 0.004, R * 0.94 - 0.003, ang);
+  vec3 cCor = mix(vec3(1.0, 0.62, 0.3), vec3(1.0, 0.17, 0.08), uMood);
+  vec3 cRing = mix(vec3(1.0, 0.88, 0.7), vec3(1.0, 0.4, 0.26), uMood);
+  vec3 sun = cCor * corona * (4.2 + uMood * 2.2) * (1.0 - uDawn * 0.82) + cRing * ring * 6.0 + vec3(1.0, 0.95, 0.9) * bead * 14.0
+           + vec3(1.0, 0.84, 0.58) * sunDisc * 2.6;
+  float moonDark = mix(mix(0.04, 1.0, moon), 1.0, smoothstep(0.55, 1.0, uDawn));  // на дневном небе новолуние не видно
+  col = col * moonDark + sun * moon;
+  float disc = moon;
 
   // облака: два слоя шума на «потолке», ползут в разные стороны
   vec2 cuv = d.xz / (max(h, 0.0) + 0.16);
@@ -2181,14 +2216,17 @@ void main() {
   float n3 = texture2D(tNoise, cuv * 0.37 + w * 3.3).r;
   float dens = n1 * 0.56 + n2 * 0.29 + n3 * 0.15;
   float nearSun = pow(sdp, 22.0);
-  float cover = smoothstep(0.36 + nearSun * 0.26, 0.6 + nearSun * 0.26, dens);
+  float clear = nearSun * 0.26 + uDawn * 0.17;
+  float cover = smoothstep(0.36 + clear, 0.6 + clear, dens);
   float thick = smoothstep(0.47, 0.74, dens);
   float thin = cover * (1.0 - thick);
   vec3 cc = mix(vec3(0.2, 0.215, 0.29), vec3(0.04, 0.045, 0.07), thick);
   cc += vec3(0.32, 0.2, 0.2) * thin * (0.5 + 0.5 * n3) * (0.35 + 0.65 * smoothstep(-0.4, 0.6, sd));          // закатный румянец кромок
-  cc += vec3(1.5, 0.82, 0.4) * thin * (pow(sdp, 3.0) * 0.4 + pow(sdp, 14.0) * 0.9);   // золотая кайма у светила
+  cc += mix(vec3(1.5, 0.82, 0.4), vec3(1.7, 0.3, 0.16), uMood) * thin * (pow(sdp, 3.0) * 0.4 + pow(sdp, 14.0) * 0.9);   // кайма у светила: золото → кровь
   cc += vec3(0.22, 0.27, 0.42) * thin * 0.45;
   cc += vec3(0.5, 0.2, 0.1) * thick * pow(sdp, 2.0) * 0.14;
+  cc = mix(cc, cc * vec3(1.5, 0.5, 0.48) + vec3(0.05, 0.0, 0.0), uMood * 0.75);          // багровые тучи
+  cc = mix(cc, cc * 2.6 + vec3(0.3, 0.24, 0.18), uDawn);                                 // светлые облака рассвета
   cc += uFlash * vec3(0.8, 0.9, 1.25) * (0.18 + pow(max(dot(d, uFlashDir), 0.0), 3.0) * 3.0) * (0.35 + thin * 1.4);
   col = mix(col, cc + sun * disc * 0.12, cover * smoothstep(0.0, 0.14, h) * 0.94);
 
@@ -2369,6 +2407,46 @@ function ashField(count, box) {
   return pts;
 }
 
+// ---------- Дождь: косые штрихи, целиком на видеокарте (две вершины на каплю, хвост тянется против скорости) ----------
+function rainField(count, box) {
+  const R = rng(9), seed = new Float32Array(count * 8), end = new Float32Array(count * 2);
+  for (let i = 0; i < count; i++) {
+    const a = R(), b = R(), c = R(), d = R();
+    for (let k = 0; k < 2; k++) { seed.set([a, b, c, d], (i * 2 + k) * 4); end[i * 2 + k] = k; }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 6), 3));
+  geo.setAttribute('seed', new THREE.BufferAttribute(seed, 4));
+  geo.setAttribute('end', new THREE.BufferAttribute(end, 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uBox: { value: new THREE.Vector3(...box) }, uAmount: { value: 0 }, uColor: { value: new THREE.Color(0.5, 0.58, 0.78) } },
+    vertexShader: `
+      attribute vec4 seed; attribute float end; uniform float uTime; uniform vec3 uCam; uniform vec3 uBox; uniform float uAmount;
+      varying float vA;
+      void main() {
+        vec3 vel = vec3(3.2, -(20.0 + seed.w * 9.0), -1.4);
+        vec3 p = seed.xyz * uBox + vel * uTime;
+        p = mod(p - uCam + uBox * 0.5, uBox) - uBox * 0.5 + uCam;
+        vA = step(fract(seed.w * 7.31), uAmount) * smoothstep(uBox.x * 0.5, uBox.x * 0.3, length(p.xz - uCam.xz)) * (1.0 - end * 0.75);
+        p -= normalize(vel) * end * (0.5 + seed.y * 0.5);
+        gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor; varying float vA;
+      void main() {
+        if (vA < 0.02) discard;
+        gl_FragColor = vec4(uColor, vA * 0.5);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, depthWrite: false,
+  });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+  lines.visible = false;
+  return lines;
+}
+
 function createSky(scene) {
   const fogCol = new THREE.Color(FOG_COLOR);
   scene.background = fogCol.clone();
@@ -2394,7 +2472,7 @@ function createSky(scene) {
   const skyMat = new THREE.ShaderMaterial({
     uniforms: {
       tNoise: { value: noise }, uSunDir: { value: SUN_DIR }, uTime: { value: 0 }, uFlash: { value: 0 }, uFlashDir: { value: new THREE.Vector3(0, 0.3, 1) },
-      uAlpha: { value: 0 }, uHorizon: { value: fogCol.clone() }, uMid: { value: new THREE.Color(0x2a3558) }, uZenith: { value: new THREE.Color(0x0b0e1e) },
+      uAlpha: { value: 0 }, uMood: { value: 0 }, uDawn: { value: 0 }, uMoonDir: { value: SUN_DIR.clone() }, uHorizon: { value: fogCol.clone() }, uMid: { value: new THREE.Color(0x2a3558) }, uZenith: { value: new THREE.Color(0x0b0e1e) },
     },
     vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false, depthTest: true, fog: false,
   });
@@ -2483,6 +2561,9 @@ function createSky(scene) {
   // ----- пепел и угольки -----
   const ash = ashField(700, [44, 18, 44]);
   scene.add(ash);
+  const rain = rainField(1500, [36, 24, 36]);
+  scene.add(rain);
+  const rainCold = new THREE.Color(0.5, 0.58, 0.78), rainBlood = new THREE.Color(0.9, 0.24, 0.2);
 
   // ----- молнии: ветвящийся разряд (ломаная лента, строится заново при каждом ударе) -----
   const BOLT_SEG = 64;
@@ -2523,14 +2604,48 @@ function createSky(scene) {
 
   // ----- молнии -----
   const L = { t: 5 + Math.random() * 6, flash: 0, seq: [], onStrike: null };
-  const hemiBase = hemi.intensity, hemiCol = hemi.color.clone(), fogBase = fogCol.clone();
   const bolt = new THREE.Color(0.75, 0.85, 1.2);
+
+  // ----- настроение неба: 0 — затмение, mood 1 — кровавое затмение (ярость босса), dawn 1 — затмение ушло -----
+  // Каждая величина задана тройкой [обычное, кровавое, рассвет]; сцена плавно перетекает между ними.
+  const C = (h) => new THREE.Color(h);
+  const PAL = {
+    sun: [C(0xffc896), C(0xff8e62), C(0xfff0d8)], sky: [C(0xaab6d4), C(0xb09cb6), C(0xcfe0ff)], ground: [C(0x5c4e52), C(0x5c3c44), C(0x8e8072)],
+    fog: [C(FOG_COLOR), C(0x574058), C(0x7c8eb4)], mid: [C(0x2a3558), C(0x3a1830), C(0x4670b4)], zen: [C(0x0b0e1e), C(0x12050c), C(0x183a7c)],
+  };
+  const NUM = { sun: [5.6, 5.4, 9.2], hemi: [2.7, 2.5, 3.5], fog: [FOG_DENSITY, FOG_DENSITY * 1.08, FOG_DENSITY * 0.6] };
+  const M = { mood: 0, moodTo: 0, dawn: 0, dawnTo: 0, rain: 0 };
+  const mixC = (out, a) => out.copy(a[0]).lerp(a[1], M.mood).lerp(a[2], M.dawn);
+  const mixN = (a) => (a[0] + (a[1] - a[0]) * M.mood) * (1 - M.dawn) + a[2] * M.dawn;
+  const hemiCol = new THREE.Color(), fogBase = new THREE.Color();
+  const moonSide = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), SUN_DIR).normalize();
+  const moonUp = new THREE.Vector3().crossVectors(SUN_DIR, moonSide);
+  function applyMood() {
+    mixC(sun.color, PAL.sun); sun.intensity = mixN(NUM.sun);
+    mixC(hemiCol, PAL.sky); mixC(hemi.groundColor, PAL.ground);
+    mixC(fogBase, PAL.fog); scene.fog.density = mixN(NUM.fog);
+    const u = skyMat.uniforms;
+    u.uHorizon.value.copy(fogBase); mixC(u.uMid.value, PAL.mid); mixC(u.uZenith.value, PAL.zen);
+    u.uMood.value = M.mood * (1 - M.dawn); u.uDawn.value = M.dawn;
+    const k = M.dawn * M.dawn * (3 - 2 * M.dawn) * 0.3;            // луна сползает вверх-влево
+    u.uMoonDir.value.copy(SUN_DIR).addScaledVector(moonSide, -k * 0.75).addScaledVector(moonUp, k * 0.66).normalize();
+  }
+  applyMood();
 
   function update(dt, time, camera) {
     dome.position.copy(camera.position);
     skyMat.uniforms.uTime.value = time;
     ash.material.uniforms.uTime.value = time;
     ash.material.uniforms.uCam.value.copy(camera.position);
+    // гроза: дождь начинается, когда небо багровеет, в ярости босса он кровавый; на рассвете стихает
+    const rainK = Math.max(0, Math.min(1, (M.mood - 0.24) / 0.6)) * (1 - M.dawn);
+    M.rain = rainK;
+    rain.visible = rainK > 0.01;
+    if (rain.visible) {
+      const u = rain.material.uniforms;
+      u.uTime.value = time % 600; u.uCam.value.copy(camera.position); u.uAmount.value = rainK;
+      u.uColor.value.copy(rainCold).lerp(rainBlood, Math.max(0, (M.mood - 0.6) / 0.4)).multiplyScalar(1 + L.flash * 5);
+    }
     for (const s of smokes) s.material.uniforms.uTime.value = time;
     for (const b of beams) b.m.rotation.z = Math.sin(time * 0.13 + b.ph) * 0.55 + Math.sin(time * 0.31 + b.ph * 2.0) * 0.12;
     for (const f of flak) {
@@ -2553,7 +2668,14 @@ function createSky(scene) {
       f.s.visible = true;
     }
     // молния: двойная вспышка в облаках, на мгновение высвечивает сцену холодным светом
-    L.t -= dt;
+    // настроение неба течёт к цели
+    if (M.mood !== M.moodTo || M.dawn !== M.dawnTo) {
+      M.mood += (M.moodTo - M.mood) * Math.min(1, dt * 0.7);
+      if (Math.abs(M.moodTo - M.mood) < 0.002) M.mood = M.moodTo;
+      M.dawn += Math.sign(M.dawnTo - M.dawn) * Math.min(Math.abs(M.dawnTo - M.dawn), dt / 9);
+      applyMood();
+    }
+    L.t -= dt * (1 + M.mood * 1.6);
     if (L.t <= 0) {
       L.t = 7 + Math.random() * 13;
       const a = Math.random() * 6.283;
@@ -2573,13 +2695,21 @@ function createSky(scene) {
     skyMat.uniforms.uFlash.value = fl;
     boltMesh.visible = fl > 0.12;
     boltMat.opacity = Math.min(1, fl * 1.4);
-    hemi.intensity = hemiBase + fl * 2.2;
+    hemi.intensity = mixN(NUM.hemi) + fl * 2.2;
     hemi.color.copy(hemiCol).lerp(bolt, Math.min(1, fl));
     scene.fog.color.copy(fogBase).lerp(bolt, fl * 0.3);
   }
 
   return {
     sun, hemi, sunDir: SUN_DIR, lightning: L, update,
+    // настроение: mood 0..1 — насколько «кровавое» затмение; dawn 0..1 — затмение уходит, наступает рассвет
+    setMood: (v) => { M.moodTo = v; },
+    setDawn: (v) => { M.dawnTo = v; },
+    resetMood: () => { M.mood = M.moodTo = 0; M.dawn = M.dawnTo = 0; applyMood(); },
+    get dawn() { return M.dawn; },
+    get mood() { return M.mood; },
+    get rain() { return M.rain; },
+    strike: () => { L.t = 0; },                                    // молния прямо сейчас
     setScale: (h) => { ash.material.uniforms.uScale.value = h * 0.6; },
     setMask: (on) => { skyMat.uniforms.uAlpha.value = on ? 0 : 1; },   // маска неба нужна только постобработке
     // экранное положение светила (0..1) и видимость — для лучей света
@@ -2698,6 +2828,27 @@ function stainedGlass(kind = 0, seed = 1) {
   return T.done();
 }
 
+// Разбитый витраж: в стекле неровная дыра, от неё расходятся трещины; по краям арки остаются осколки
+function brokenGlass(src, seed = 1) {
+  const W = src.width, H = src.height, c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  g.drawImage(src, 0, 0);
+  const img = g.getImageData(0, 0, W, H), d = img.data, R = rng(seed * 13 + 5);
+  const cx = W / 2, cy = H * 0.56, N = 14, rad = [];
+  for (let i = 0; i < N; i++) rad.push(0.62 + R() * 0.38);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const dx = (x - cx) / (W * 0.46), dy = (y - cy) / (H * 0.4), r = Math.hypot(dx, dy);
+    const a = (Math.atan2(dy, dx) / (Math.PI * 2) + 0.5) * N, i0 = Math.floor(a) % N, f = a - Math.floor(a);
+    const edge = rad[i0] * (1 - f) + rad[(i0 + 1) % N] * f - Math.abs(f - 0.5) * 0.22;   // зубчатый край
+    const i = (y * W + x) * 4;
+    if (r < edge) d[i + 3] = 0;
+    else if (r < edge + 0.07 || Math.abs(f - 0.5) > 0.47) { d[i] *= 0.3; d[i + 1] *= 0.3; d[i + 2] *= 0.34; }   // кромка и трещины
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
 // ---------- Окно-роза (128×128): лепестки, кольца, каменные переплёты ----------
 function roseWindow() {
   const S = 128, T = px(S, S), c = S / 2 - 0.5, N = 12;
@@ -2799,7 +2950,7 @@ function chainCanvas() {
   return T.done();
 }
 
-return { fireSheet, stainedGlass, roseWindow, sigil, carpet, shaftCanvas, poolCanvas, chainCanvas };
+return { fireSheet, stainedGlass, brokenGlass, roseWindow, sigil, carpet, shaftCanvas, poolCanvas, chainCanvas };
 })();
 // ===== level.js =====
 const __m_level = await (async () => {
@@ -2808,7 +2959,7 @@ const { SPRITES, spriteTexture, setSpriteFrame, spriteGeometry } = __m_sprites;
 const { miscArt, haloCanvas } = __m_art_misc;
 const { nearestTexture, rng, noise2 } = __m_pixel;
 const { SUN_DIR, noiseTex } = __m_sky;
-const { fireSheet, stainedGlass, roseWindow, sigil, carpet, shaftCanvas, poolCanvas, chainCanvas } = __m_art_env;
+const { fireSheet, stainedGlass, brokenGlass, roseWindow, sigil, carpet, shaftCanvas, poolCanvas, chainCanvas } = __m_art_env;
 // Карта: южный двор (старт, десантная капсула) → ворота → арена 40×40 с платформой, плавильной пропастью
 // и секретом → северные врата под фасадом собора (выход).
 // Окружение — 3D с детальными пиксельными текстурами и рельефом; огонь, трупы и знамёна — спрайты.
@@ -2905,6 +3056,14 @@ function buildLevel(scene, world, G) {
     wax: new THREE.MeshLambertMaterial({ color: 0xd8cdb4, emissive: 0x3a2a14 }),
     carpet: new THREE.MeshLambertMaterial({ map: tex(carpet(), true), vertexColors: true }),
   };
+  for (const m of [M.snow, M.tiles]) {
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.tWetBig = { value: noiseTex() };
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform sampler2D tWetBig;')
+        .replace('#include <specularmap_fragment>', '#include <specularmap_fragment>\n#ifdef USE_FOG\n  specularStrength *= smoothstep(0.36, 0.6, texture2D(tWetBig, vFogWorld.xz * 0.012).r) * 1.3;\n#endif');
+    };
+  }
   const capMat = M.snow; // верхние грани — каменные плиты
   const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
   const mtxOf = (x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) => new THREE.Matrix4().compose(_p.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), _s.set(sx, sy, sz));
@@ -3008,6 +3167,13 @@ function buildLevel(scene, world, G) {
   ground(PIT.minX, 80, PIT.maxZ, 80, 0, M.snow);
   ground(PIT.maxX, 80, PIT.minZ, PIT.maxZ, 0, M.snow);
   world.addPit(PIT.minX, PIT.maxX, PIT.minZ, PIT.maxZ);
+  for (const [x0, x1, z0, z1] of [[-420, 420, -420, -80], [-420, 420, 80, 420], [-420, -80, -80, 80], [80, 420, -80, 80]]) {
+    const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0, 6, 6).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, 0, (z0 + z1) / 2);
+    const P = g.attributes.position, uv = g.attributes.uv, col = [];
+    for (let i = 0; i < P.count; i++) { uv.setXY(i, P.getX(i) / 8, -P.getZ(i) / 8); const k = 0.66 + gn(P.getX(i) / 60, P.getZ(i) / 60) * 0.3; col.push(k, k, k * 1.03); }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    batch.add(g, M.snow, new THREE.Matrix4());
+  }
   // стенки плавильной пропасти уходят вниз к расплаву
   const pitCx = (PIT.minX + PIT.maxX) / 2;
   block(PIT.minX - 0.5, 0, 1, 12, -16, 16, M.rock, { top: M.rock, collide: false, texScale: 4 });
@@ -3129,7 +3295,11 @@ function buildLevel(scene, world, G) {
     if (s >= 0.8) emberSpots.push([x, y + 0.9 * s, z]);
   }
 
-  const glass = [0, 1, 2].map((k) => tex(stainedGlass(k, 1)));
+  const glassCv = [0, 1, 2].map((k) => stainedGlass(k, 1));
+  const glass = glassCv.map((c) => tex(c));
+  const brokenMats = glassCv.map((c, k) => new THREE.MeshBasicMaterial({ map: tex(brokenGlass(c, k + 1)), alphaTest: 0.5, color: HDR(1.5, 1.5, 1.5) }));
+  const GLASS_COLS = [[0xff4040, 0xffb040, 0xffe08a], [0x4080ff, 0x80d0ff, 0xf0f6ff], [0xa050ff, 0x40d090, 0xff70a0]];
+  const panes = [];                 // витражи, которые можно разбить выстрелом
   const glassCol = [HDR(1.6, 0.62, 0.22), HDR(0.42, 0.78, 1.7), HDR(1.0, 0.42, 1.5)];
   const glassMats = glass.map((map) => new THREE.MeshBasicMaterial({ map, alphaTest: 0.5, color: HDR(2.3, 2.3, 2.3) }));
   const shaftMats = glassCol.map((c) => addMat(shaftTex, c, 0.34));
@@ -3173,6 +3343,12 @@ function buildLevel(scene, world, G) {
       g.position.set(wx, 6.3, wz);
       g.rotation.y = ry;
       scene.add(g);
+      const pane = { mesh: g, kind: S.kind, nx, nz, shaft: null, pool: null, broken: false };
+      g.userData.glass = pane;
+      panes.push(pane);
+      solid.push(g);
+      const [bx, bz] = at(a, 0.014);
+      deco(strip(1.5, 3.3, 0.02), M.iron, mtxOf(bx, 5.75, bz));                                     // тёмный проём за стеклом
       const [sx2, sz2] = at(a, 0.14);
       deco(strip(2.6, 0.22, 0.3), M.blocks, mtxOf(sx2, 3.78, sz2), { tint: [1.12, 1.12, 1.14] });   // подоконник
       if (!S.shafts) continue;
@@ -3184,9 +3360,10 @@ function buildLevel(scene, world, G) {
       sh.rotation.set(-0.72, ry, 0);
       sh.renderOrder = 3;
       scene.add(sh);
+      pane.shaft = sh;
       if (S.noPool) continue;
       const [fx2, fz2] = at(a, 5.6);
-      lightPool(fx2, 0.03, fz2, S.along === 'x' ? 3.4 : 7, S.along === 'x' ? 7 : 3.4, glassCol[S.kind], 0.2);
+      pane.pool = lightPool(fx2, 0.03, fz2, S.along === 'x' ? 3.4 : 7, S.along === 'x' ? 7 : 3.4, glassCol[S.kind], 0.2);
     }
   }
   // факелы: кованый держатель, пламя, отсвет на стене
@@ -3736,6 +3913,35 @@ function buildLevel(scene, world, G) {
   // тела-декорации получают цвет местного света один раз (они неподвижны)
   for (const c of corpses) { lightAt(c.position, c.material.color); c.material.color.multiplyScalar(0.72); }
 
+  // ---------------- Витражи бьются: осколки цветного стекла, звон, столб света гаснет ----------------
+  function shatter(mesh, point) {
+    const gl = mesh.userData.glass;
+    if (!gl || gl.broken) return false;
+    gl.broken = true;
+    mesh.material = brokenMats[gl.kind];
+    if (gl.shaft) gl.shaft.visible = false;
+    if (gl.pool) gl.pool.visible = false;
+    if (G && G.fx) {
+      const n = new THREE.Vector3(gl.nx, 0.2, gl.nz);
+      const mid = new THREE.Vector3(mesh.position.x + gl.nx * 0.2, mesh.position.y, mesh.position.z + gl.nz * 0.2);
+      for (const c of GLASS_COLS[gl.kind]) {
+        G.fx.sparks.burst(point, 14, c, { speed: 7, life: 1.3, gravity: 12, dir: n, spread: 0.9, size: 0.16, sizeVar: 1.3, hdr: 2.6 });
+        for (const dy of [-1.3, 0, 1.3]) G.fx.sparks.burst(mid.clone().setY(mid.y + dy), 9, c, { speed: 4.5, life: 1.5, gravity: 11, dir: n, spread: 1, size: 0.2, sizeVar: 1.4, hdr: 2.2 });
+      }
+      G.fx.dust.burst(point, 12, 0xc8d0e0, { speed: 3, life: 0.7, gravity: 6, dir: n, spread: 0.8, size: 0.1, alpha: 0.8 });
+      G.fx.lights.flash(point, GLASS_COLS[gl.kind][0], 30, 0.2, 10);
+    }
+    return true;
+  }
+  function resetGlass() {
+    for (const gl of panes) {
+      gl.broken = false;
+      gl.mesh.material = glassMats[gl.kind];
+      if (gl.shaft) gl.shaft.visible = true;
+      if (gl.pool) gl.pool.visible = true;
+    }
+  }
+
   // ---------------- Анимация: огонь, знамёна, лампады, расплав, печать ----------------
   const api = { shadowsDirty: true };
   let emberT = 0, smokeT = 0, sigilK = 0.2;
@@ -3786,7 +3992,7 @@ function buildLevel(scene, world, G) {
   }
 
   return Object.assign(api, {
-    solid, spawnPoints, pickupSpots, barrelSpots, gates, secret, update, PH, setLights, lightAt, sunAt,
+    solid, spawnPoints, pickupSpots, barrelSpots, gates, secret, update, PH, setLights, lightAt, sunAt, shatter, resetGlass,
     playerStart: { x: 0, z: 30, yaw: 0 },
     arenaEnter: (p) => p.z < 18.5 && Math.abs(p.x) < 19,
     exitReached: (p) => p.z < -26,
@@ -5483,7 +5689,37 @@ function tone({ dur, vol, type = 'sine', f0, f1, delay = 0, attack = 0.005, dest
 
 const V = (v) => v * (settings.volume ?? 1);
 
+// Шум дождя: зацикленный фильтрованный шум, громкость следует за силой дождя (0..1)
+let rainNodes = null;
+function rainLevel(v) {
+  if (!ctx) return;
+  if (!rainNodes) {
+    if (v <= 0) return;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuf; src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass'; f.frequency.value = 1500;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    src.connect(f).connect(g).connect(out);
+    src.start();
+    rainNodes = { g };
+  }
+  rainNodes.g.gain.setTargetAtTime(v * 0.11 * (settings.volume ?? 1), ctx.currentTime, 0.5);
+}
+
 const sfx = {
+  // рёв входящей в атмосферу капсулы: нарастающий шум и падающий свист (длится ~sec секунд)
+  dropPod(sec = 2.8) {
+    noise({ dur: sec * 0.62, vol: V(0.12), type: 'bandpass', f0: 240, f1: 900, q: 0.7, attack: sec * 0.3 });
+    noise({ dur: sec * 0.6, vol: V(0.3), f0: 500, f1: 2600, delay: sec * 0.42, attack: sec * 0.4 });
+    tone({ dur: sec, vol: V(0.07), type: 'sawtooth', f0: 520, f1: 70, attack: sec * 0.5 });
+  },
+  // звон разбитого витража
+  glass(v = 1) {
+    noise({ dur: 0.5, vol: V(0.26 * v), type: 'highpass', f0: 3200, f1: 5200, q: 0.8 });
+    for (let i = 0; i < 5; i++) tone({ dur: 0.18 + Math.random() * 0.25, vol: V(0.05 * v), type: 'triangle', f0: 1800 + Math.random() * 3200, delay: Math.random() * 0.22 });
+  },
   // раскат грома после молнии: delay — секунды до звука (расстояние до грозы)
   thunder(delay = 1, v = 1) {
     noise({ dur: 0.3, vol: V(0.16 * v), type: 'bandpass', f0: 900, f1: 220, q: 0.6, delay });
@@ -5622,7 +5858,7 @@ const music = {
   },
 };
 
-return { audioSettings, initAudio, sfx, music };
+return { audioSettings, initAudio, rainLevel, sfx, music };
 })();
 // ===== weapons.js =====
 const __m_weapons = await (async () => {
@@ -5982,8 +6218,16 @@ class Weapons {
     const [cw, ch] = sheet.meta.cell, viewX = sheet === this.sheets.throw ? 0 : sheet === this.sheets.chainblade ? 120 : 176;
     // покачивание при ходьбе, отставание в прыжке, лёгкое «дыхание»
     const bob = P.speed01 * (P.onGround ? 1 : 0.3);
-    const x = Math.round((OW - 560) / 2 + viewX + Math.cos(P.bob) * 6 * bob);
-    const y = Math.round(OH - ch + 4 + Math.abs(Math.sin(P.bob)) * 6 * bob + Math.sin(time * 1.7) * 1.2 + Math.max(-8, Math.min(10, P.vel.y * -0.8)));
+    // инерция: при повороте камеры оружие чуть отстаёт и догоняет — руки ощущаются «весомыми»
+    if (dt > 0) {
+      const dyaw = Math.atan2(Math.sin(P.yaw - (this.lastYaw ?? P.yaw)), Math.cos(P.yaw - (this.lastYaw ?? P.yaw))), dpitch = P.pitch - (this.lastPitch ?? P.pitch);
+      this.lastYaw = P.yaw; this.lastPitch = P.pitch;
+      const k = Math.min(1, dt * 11);
+      this.swayX = (this.swayX || 0) + (Math.max(-18, Math.min(18, (dyaw / dt) * 2.4)) - (this.swayX || 0)) * k;
+      this.swayY = (this.swayY || 0) + (Math.max(-12, Math.min(12, (dpitch / dt) * 2.2)) - (this.swayY || 0)) * k;
+    }
+    const x = Math.round((OW - 560) / 2 + viewX + Math.cos(P.bob) * 6 * bob + (this.swayX || 0));
+    const y = Math.round(OH - ch + 4 + Math.abs(Math.sin(P.bob)) * 6 * bob + Math.sin(time * 1.7) * 1.2 + Math.max(-8, Math.min(10, P.vel.y * -0.8)) + (this.swayY || 0));
     const [sx, sy] = this.frameOf(sheet, anim, f);
     if (sheet.meta.muzzle && sheet === this.sheets[k]) this.muzzleNdc.set(((x + sheet.meta.muzzle[0] * cw) / OW) * 2 - 1, 1 - ((y + sheet.meta.muzzle[1] * ch) / OH) * 2);
     const flashLit = (this.flashT > 0 || this.beamOn) && this.swingT < 0 && !this.def.melee;
@@ -7273,6 +7517,7 @@ class Flow {
     this.G.level.gates.exit.set(false);
     this.G.hud.objective('Вход на площадь найден. Зачисти её от еретиков.', 'Иди к воротам площади');
     music.setIntensity(0);
+    this.G.sky.resetMood();
   }
 
   get remaining() { return this.queue.length + this.G.enemies.alive.filter((e) => e.type !== 'boss').length; }
@@ -7299,6 +7544,7 @@ class Flow {
     G.hud.objective(i === 0 ? 'Врата заперты за нами. Еретики идут — прими бой!' : i === 1 ? 'Вторая волна. Среди них — тяжёлый демон. Не стой на месте.' : 'Последняя волна перед их чемпионом. Держись!', `Волна ${i + 1} из 3`);
     sfx.horn();
     music.setIntensity(1);
+    G.sky.setMood([0.1, 0.22, 0.38][i]);            // с каждой волной затмение багровеет
   }
 
   startBoss() {
@@ -7309,6 +7555,9 @@ class Flow {
     G.hud.objective('Колосс пробудился! Бей в пылающее сердце, держись подальше от клешни.', 'Сокруши Колосса');
     sfx.bossRoar();
     music.setIntensity(2);
+    G.sky.setMood(0.56);
+    G.sky.strike();                                  // Колосс является под удар молнии
+    G.fx.screenFlash(0.5, 0xc8d8ff);
   }
 
   update(dt) {
@@ -7346,6 +7595,8 @@ class Flow {
         this.nextWave = this.wave + 1;
         G.hud.banner(this.wave < 2 ? 'ВОЛНА ОТБИТА' : 'ТИШИНА…', 2);
         music.setIntensity(0.4);
+        G.fx.slowmo(0.3, 0.6);                         // последний враг волны падает в замедлении
+        G.fx.screenFlash(0.22, 0xffe2b0);
         if (this.wave === 1) {
           // после второй волны — новое оружие в центре
           G.pickups.add('weapon:thermal', 0, 0, 2.5);
@@ -7364,6 +7615,9 @@ class Flow {
 
   onBossDead() {
     const G = this.G;
+    // затмение кончается: луна сходит со светила, площадь заливает утренний свет
+    G.sky.setMood(0);
+    G.sky.setDawn(1);
     setTimeout(() => {
       if (this.stage !== 'boss') return;
       this.stage = 'exit';
@@ -7377,6 +7631,8 @@ class Flow {
 
   onBossPhase(phase) {
     const G = this.G;
+    G.sky.setMood(phase === 3 ? 1 : 0.76);            // чем злее Колосс, тем багровее небо
+    G.sky.strike();
     if (phase === 2) G.hud.objective('Колосс зовёт фанатиков и бьёт ракетами! Ищи укрытие.', 'Колосс: фаза 2');
     if (phase === 3) G.hud.objective('Он в ярости! Добей его, пока он не испепелил площадь!', 'Колосс: фаза 3');
   }
@@ -7861,6 +8117,7 @@ void main() {
 
 const FRAG_FINAL = COMMON + `
 uniform sampler2D tScene; uniform sampler2D tBloom; uniform sampler2D tRays; uniform sampler2D tOverlay;
+uniform sampler2D tStreak; uniform sampler2D tMask; uniform vec2 uSun; uniform float uAspect, uStreak, uFlare;
 uniform vec2 uRes; uniform float uTime;
 uniform float uExposure, uBloom, uRays, uVignette, uGrain, uSaturation, uContrast, uCA;
 uniform float uOverlayOn, uOverlayBoost, uDamage, uLowHp, uDash, uFlash, uDesat;
@@ -7895,6 +8152,21 @@ void main() {
   vec3 bloom = texture2D(tBloom, vUv).rgb;
   float rays = texture2D(tRays, vUv).r * uRays;
   hdr += bloom * uBloom + uRayColor * rays;
+  // анаморфные блики: яркие огни тянутся в горизонтальные холодные штрихи, как в киношной оптике
+  if (uStreak > 0.001) {
+    vec3 st = vec3(0.0);
+    for (int i = -4; i <= 4; i++) st += texture2D(tStreak, vUv + vec2(float(i) * 0.034, 0.0)).rgb * (1.0 - abs(float(i)) * 0.2);
+    hdr += st * 0.2 * uStreak * vec3(0.5, 0.7, 1.0);
+  }
+  // блики объектива от светила: цепочка «призраков» вдоль оси светило → центр кадра (если светило не за стеной)
+  if (uFlare > 0.001) {
+    float vis = texture2D(tMask, clamp(uSun, vec2(0.02), vec2(0.98))).a;
+    vec2 axis = vec2(0.5) - uSun, asp = vec2(uAspect, 1.0);
+    // два мягких пятна далеко за центром кадра — не мешают целиться
+    float d1 = length((vUv - (uSun + axis * 1.55)) * asp), d2 = length((vUv - (uSun + axis * 2.2)) * asp);
+    vec3 fl = vec3(0.55, 0.75, 1.0) * smoothstep(0.055, 0.0, d1) * 0.16 + vec3(1.0, 0.8, 0.55) * smoothstep(0.11, 0.0, d2) * 0.1;
+    hdr += fl * uFlare * vis;
+  }
   hdr += uFlashColor * uFlash;
   vec3 col = aces(hdr);
 
@@ -7958,6 +8230,7 @@ class PostFX {
     this.mRays = mat(FRAG_RAYS, { tBright: U(null), uSun: U(new THREE.Vector2(0.5, 0.5)), uAspect: U(1), uTime: U(0), uDisc: U(0.06) });
     this.mFinal = mat(FRAG_FINAL, {
       tScene: U(null), tBloom: U(null), tRays: U(null), tOverlay: U(null), uRes: U(new THREE.Vector2()), uTime: U(0),
+      tStreak: U(null), tMask: U(null), uSun: U(new THREE.Vector2(0.5, 0.5)), uAspect: U(1), uStreak: U(0), uFlare: U(0),
       uExposure: U(1), uBloom: U(0.9), uRays: U(0), uVignette: U(0.4), uGrain: U(0.016), uSaturation: U(1.08), uContrast: U(1.06), uCA: U(0.0012),
       uOverlayOn: U(0), uOverlayBoost: U(0), uDamage: U(0), uLowHp: U(0), uDash: U(0), uFlash: U(0), uDesat: U(0),
       uRayColor: U(new THREE.Color(1.0, 0.72, 0.42)), uShadowTint: U(new THREE.Color(0.93, 0.97, 1.06)), uHighTint: U(new THREE.Color(1.06, 1.0, 0.92)),
@@ -7967,7 +8240,7 @@ class PostFX {
     // состояние, которым управляет игра
     this.fx = {
       exposure: 1.12, damage: 0, lowHp: 0, dash: 0, flash: 0, flashColor: new THREE.Color(1, 0.9, 0.7), desat: 0, ca: 0,
-      weaponBoost: 0, weaponTint: new THREE.Color(1, 1, 1), sunScreen: new THREE.Vector2(0.5, 0.5), rays: 0,
+      weaponBoost: 0, weaponTint: new THREE.Color(1, 1, 1), sunScreen: new THREE.Vector2(0.5, 0.5), rays: 0, rayDisc: 1, flare: 0,
     };
     this.overlayTex = null;
     this.blank = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
@@ -8045,7 +8318,13 @@ class PostFX {
     }
     const R = this.rts, fx = this.fx;
     const useOverlay = !!this.overlayTex;
-    if (useOverlay) this.overlayTex.needsUpdate = true;
+    if (useOverlay) {
+      // Память под текстуру выделяется один раз под размер холста. Холст меняет размер вместе с окном —
+      // тогда текстуру нужно освободить, иначе видеокарта отклоняет каждую загрузку и оружие пропадает.
+      const c = this.overlayCanvas;
+      if (c.width !== this.ovW || c.height !== this.ovH) { this.overlayTex.dispose(); this.ovW = c.width; this.ovH = c.height; }
+      this.overlayTex.needsUpdate = true;
+    }
     const ovTex = useOverlay ? this.overlayTex : this.blank;
 
     // 1) сцена → HDR-буфер
@@ -8079,13 +8358,17 @@ class PostFX {
     const raysOn = this.quality === 'high' && fx.rays > 0.01;
     if (raysOn) {
       u = this.mRays.uniforms;
-      u.tBright.value = R.bright.texture; u.uSun.value.copy(fx.sunScreen); u.uAspect.value = this.w / this.h; u.uTime.value = time % 10; u.uDisc.value = 0.078 / (camera.fov * Math.PI / 180);
+      u.tBright.value = R.bright.texture; u.uSun.value.copy(fx.sunScreen); u.uAspect.value = this.w / this.h; u.uTime.value = time % 10; u.uDisc.value = (0.078 / (camera.fov * Math.PI / 180)) * fx.rayDisc;
       this.pass(this.mRays, R.rays);
     }
 
     // 5) сведение на экран
     u = this.mFinal.uniforms;
     u.tScene.value = R.scene.texture; u.tBloom.value = acc.texture; u.tRays.value = R.rays.texture; u.tOverlay.value = ovTex;
+    const high = this.quality === 'high';
+    u.tStreak.value = (R.up[Math.min(2, R.down.length - 2)] || acc).texture; u.tMask.value = R.bright.texture;
+    u.uSun.value.copy(fx.sunScreen); u.uAspect.value = this.w / this.h;
+    u.uStreak.value = high ? 1 : 0; u.uFlare.value = high ? fx.flare : 0;
     u.uRes.value.set(this.w, this.h); u.uTime.value = time % 1000;
     u.uExposure.value = fx.exposure; u.uBloom.value = 0.16 * (this.hdr ? 1 : 1.6); u.uRays.value = raysOn ? fx.rays : 0;
     u.uOverlayOn.value = useOverlay ? 1 : 0; u.uOverlayBoost.value = fx.weaponBoost;
@@ -8110,7 +8393,7 @@ const { Enemies } = __m_enemies;
 const { Pickups } = __m_pickups;
 const { Flow } = __m_flow;
 const { Hud } = __m_hud;
-const { initAudio, sfx, audioSettings, music } = __m_audio;
+const { initAudio, sfx, audioSettings, music, rainLevel } = __m_audio;
 const { loadSprites, loadTextureImages } = __m_sprites;
 const { createSky } = __m_sky;
 const { PostFX } = __m_postfx;
@@ -8218,6 +8501,8 @@ G.applyHit = (hit, dmg, dir, source, quiet = false) => {
   } else if (hit.barrel) {
     G.pickups.damageBarrel(hit.barrel, dmg);
     G.fx.sparks.burst(hit.point, 6, 0xffc060, { speed: 4, life: 0.3, size: 0.06, hdr: 3 });
+  } else if (hit.object.userData.glass && G.level.shatter(hit.object, hit.point)) {
+    sfx.glass();                            // витраж разлетается цветными осколками
   } else if (!quiet) {
     G.fx.impact(hit.point, hit.normal);     // выбоина с раскалённой кромкой, искры, пыль
   }
@@ -8315,7 +8600,8 @@ function lockPointer() {
   if (p && p.catch) p.catch(() => {});
 }
 
-function startGame() {
+// withIntro — показать высадку (старт из меню); перезапуск после паузы или гибели идёт сразу в бой
+function startGame(withIntro = false) {
   initAudio();
   G.enemies.clear();
   G.projectiles.clear();
@@ -8323,12 +8609,82 @@ function startGame() {
   G.player.reset(G.level.playerStart);
   G.weapons.reset();
   G.pickups.reset();
+  G.level.resetGlass();
   G.hud.reset();
   G.flow.reset();
   game.stats = { kills: 0 };
   game.elapsed = 0;
-  resume();
+  if (withIntro) beginIntro(); else resume();
 }
+
+// ---------- Вступление: высадка в десантной капсуле ----------
+// Камера падает с неба к стартовому двору (сначала панорама крепости, потом разгон), удар о землю —
+// и управление переходит к игроку. Любая клавиша, клик или касание пропускают сцену.
+const cine = $('cine');
+const intro = { t: 0, dur: 3.2, k: 0, from: new THREE.Vector3(7, 52, 104), mid: new THREE.Vector3(), to: new THREE.Vector3(), look0: new THREE.Vector3(0, 9, -20), look1: new THREE.Vector3(), look: new THREE.Vector3() };
+function beginIntro() {
+  game.state = 'intro';
+  intro.t = 0; intro.k = 0;
+  screen.classList.add('hidden');
+  G.hud.show(false);
+  $('touch').classList.add('hidden');
+  cine.classList.remove('hidden', 'out');
+  $('cineSkip').textContent = isTouch ? 'коснись — пропустить' : 'любая клавиша — пропустить';
+  G.input.reset();
+  lockPointer();
+  sfx.dropPod(intro.dur);
+}
+function introCamera(dt) {
+  intro.t += dt;
+  const s = Math.min(1, intro.t / intro.dur), P = G.player;
+  const k = s * s * (0.22 + 0.78 * s);                              // сначала обзор сверху, затем падение с разгоном
+  intro.k = k;
+  intro.to.set(P.pos.x, P.pos.y + 1.62, P.pos.z);
+  intro.look1.set(P.pos.x, P.pos.y + 1.62, P.pos.z - 40);
+  // дуга: заход над стенами двора и почти отвесное падение в конце (кривая Безье через точку над двором)
+  intro.mid.set(P.pos.x, P.pos.y + 31, P.pos.z + 1);
+  const a = (1 - k) * (1 - k), b = 2 * k * (1 - k), c = k * k;
+  camera.position.set(intro.from.x * a + intro.mid.x * b + intro.to.x * c, intro.from.y * a + intro.mid.y * b + intro.to.y * c, intro.from.z * a + intro.mid.z * b + intro.to.z * c);
+  camera.lookAt(intro.look.lerpVectors(intro.look0, intro.look1, Math.pow(s, 3)));
+  camera.rotateZ((1 - s) * (1 - s) * 0.28);                          // капсула доворачивается к площади
+  // тряска и раскалённые искры обшивки нарастают к удару
+  const sh = k * 0.35;
+  camera.position.x += (Math.random() - 0.5) * sh; camera.position.y += (Math.random() - 0.5) * sh; camera.position.z += (Math.random() - 0.5) * sh;
+  if (s > 0.25) {
+    const f = intro.look.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    for (let i = 0; i < 2; i++) {
+      const a = Math.random() * 6.283, r = 0.6 + Math.random() * 1.4;
+      intro.look1.copy(camera.position).addScaledVector(f, 5 + Math.random() * 9);
+      intro.look1.x += Math.cos(a) * r; intro.look1.y += Math.sin(a) * r;
+      G.fx.sparks.burst(intro.look1, 1, 0xffa040, { speed: 1, life: 0.35, gravity: 0, size: 0.07, hdr: 3 });
+    }
+  }
+  if (s >= 1) endIntro();
+}
+function endIntro() {
+  if (game.state !== 'intro') return;
+  const P = G.player, p = { x: P.pos.x, y: P.pos.y + 0.15, z: P.pos.z };
+  game.state = 'playing';
+  cine.classList.add('out');
+  setTimeout(() => { if (game.state !== 'intro') cine.classList.add('hidden'); }, 700);
+  G.hud.show(true);
+  $('touch').classList.toggle('hidden', !isTouch);
+  G.input.reset();
+  // удар о землю: вспышка, встряска, кольцо пыли, оружие поднимается в руки
+  P.land = 0.3; P.addTrauma(1);
+  G.weapons.switchT = 1;
+  G.fx.screenFlash(0.85, 0xffd8a8);
+  G.fx.caKick(0.02);
+  G.fx.dust.burst(p, 30, 0x8c8478, { speed: 11, life: 1.1, gravity: 1.5, size: 0.6, sizeVar: 0.6, alpha: 0.4, spread: 1, up: 0.15 });
+  G.fx.sparks.burst(p, 40, 0xffa040, { speed: 9, life: 0.9, gravity: 7, size: 0.07, up: 0.8, hdr: 3 });
+  G.fx.flat.spawn('ring', p, new THREE.Vector3(0, 1, 0), { size: 2, grow: 16, dur: 0.7, color: 0xffb070, gain: 2.2, pow: 1.3, lift: 0.05 });
+  G.fx.lights.flash({ x: p.x, y: 1.5, z: p.z }, 0xffa050, 140, 0.5, 20);
+  sfx.explosion(1);
+  sfx.thunder(0.35, 0.8);
+}
+const skipIntro = () => { if (game.state === 'intro' && intro.t > 0.4) intro.t = intro.dur; };
+window.addEventListener('mousedown', skipIntro);
+window.addEventListener('touchstart', skipIntro, { passive: true });
 
 function resume() {
   initAudio();
@@ -8381,13 +8737,14 @@ function endGame(won) {
 }
 const ROMAN_RANK = { I: 1, II: 2, III: 3, IV: 4 };
 
-$('screenBtn').addEventListener('click', () => { if (game.state === 'paused') resume(); else startGame(); });
-$('restartBtn').addEventListener('click', () => startGame());
+$('screenBtn').addEventListener('click', () => { if (game.state === 'paused') resume(); else startGame(game.state === 'menu' || game.state === 'won'); });
+$('restartBtn').addEventListener('click', () => startGame(false));
 $('settingsBtn').addEventListener('click', () => openSheet('settings'));
 $('controlsBtn').addEventListener('click', () => openSheet('controls'));
 for (const b of document.querySelectorAll('.sheetClose')) b.addEventListener('click', closeSheets);
 $('menuBtn').addEventListener('click', () => pause());
 window.addEventListener('keydown', (e) => {
+  if (game.state === 'intro') { skipIntro(); return; }
   if (game.state === 'playing') return;
   if (e.code === 'Enter' && e.target && e.target.closest && e.target.closest('button, input')) return;   // Enter на кнопке — её собственный клик
   if (e.code === 'Escape' && screen.classList.contains('sheetOpen')) closeSheets();
@@ -8544,24 +8901,31 @@ function frame() {
   G.level.update(dt, game.time);
   if (G.level.shadowsDirty) { renderer.shadowMap.needsUpdate = true; G.level.shadowsDirty = false; }
   G.fx.update(dt, G.world, camera.position, game.time);
-  const P = G.player, inMenu = game.state === 'menu';
-  if (inMenu) menuCamera(game.time); else P.applyCamera(camera, game.time);
-  const fov = inMenu ? 62 : (camera.userData.baseFov || 76) * (camera.userData.fovK || 1);
+  const P = G.player, inMenu = game.state === 'menu', inIntro = game.state === 'intro';
+  if (inMenu) menuCamera(game.time); else if (inIntro) introCamera(rawDt); else P.applyCamera(camera, game.time);
+  const fov = inMenu ? 62 : inIntro ? 98 - 22 * intro.k : (camera.userData.baseFov || 76) * (camera.userData.fovK || 1);
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   camera.updateMatrixWorld();
   G.sky.update(dt, game.time, camera);
+  const rainNow = Math.round((game.state === 'paused' ? 0 : G.sky.rain) * 20) / 20;
+  if (rainNow !== game.rainSnd) { game.rainSnd = rainNow; rainLevel(rainNow); }
   if (game.state === 'playing' || game.state === 'paused') G.weapons.draw(dt, game.time);
   else G.weapons.ctx.clearRect(0, 0, overlay.width, overlay.height);
 
   // параметры постобработки от состояния игры
-  const fx = post.fx, W = G.weapons, alive = !inMenu && !P.dead;
+  const fx = post.fx, W = G.weapons, alive = !inMenu && !inIntro && game.state !== 'intro' && !P.dead;
   fx.damage = alive ? Math.min(1, P.hurtFlash) : 0;
   fx.lowHp = alive && P.health < 30 ? 0.5 * (1 - P.health / 30) + 0.15 : game.state === 'dead' ? 0.6 : 0;
   fx.desat = game.state === 'dead' ? 0.7 : alive && P.health < 30 ? 0.35 * (1 - P.health / 30) : 0;
-  fx.dash += ((alive && P.dashT > 0 ? 1 : 0) - fx.dash) * Math.min(1, dt * 14);
+  fx.dash += ((inIntro ? intro.k * 0.9 : alive && P.dashT > 0 ? 1 : 0) - fx.dash) * Math.min(1, dt * 14);
   fx.flash = Math.max(0, fx.flash - dt * 2.4);
   fx.weaponBoost = W.flashT > 0 || W.beamOn ? 2.4 : 0;
-  fx.rays = G.sky.sunScreen(camera, sunUv) * 0.6;
+  // светило: лучи и блики объектива; на рассвете (затмение ушло) они сильнее, а экспозиция чуть ниже
+  const dawn = G.sky.dawn, sunVis = G.sky.sunScreen(camera, sunUv);
+  fx.rays = sunVis * (0.6 - dawn * 0.3);
+  fx.rayDisc = 1 - dawn * 0.5;
+  fx.flare = sunVis * (0.3 + dawn * 0.7);
+  fx.exposure = 1.12 - dawn * 0.17;
   fx.sunScreen.copy(sunUv);
   G.level.lightAt(camera.position, fx.weaponTint);
   post.render(scene, camera, game.time);
@@ -8573,7 +8937,7 @@ G.hud.show(false);
 frame();
 
 // Для отладки из консоли браузера (например: __game.G.player.health = 999)
-window.__game = { G, game, update, THREE, startGame, applyQuality };
+window.__game = { G, game, update, THREE, startGame: () => startGame(false), startIntro: () => startGame(true), applyQuality };
 
 
 })();

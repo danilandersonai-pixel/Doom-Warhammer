@@ -338,6 +338,46 @@ function ashField(count, box) {
   return pts;
 }
 
+// ---------- Дождь: косые штрихи, целиком на видеокарте (две вершины на каплю, хвост тянется против скорости) ----------
+function rainField(count, box) {
+  const R = rng(9), seed = new Float32Array(count * 8), end = new Float32Array(count * 2);
+  for (let i = 0; i < count; i++) {
+    const a = R(), b = R(), c = R(), d = R();
+    for (let k = 0; k < 2; k++) { seed.set([a, b, c, d], (i * 2 + k) * 4); end[i * 2 + k] = k; }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 6), 3));
+  geo.setAttribute('seed', new THREE.BufferAttribute(seed, 4));
+  geo.setAttribute('end', new THREE.BufferAttribute(end, 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uBox: { value: new THREE.Vector3(...box) }, uAmount: { value: 0 }, uColor: { value: new THREE.Color(0.5, 0.58, 0.78) } },
+    vertexShader: `
+      attribute vec4 seed; attribute float end; uniform float uTime; uniform vec3 uCam; uniform vec3 uBox; uniform float uAmount;
+      varying float vA;
+      void main() {
+        vec3 vel = vec3(3.2, -(20.0 + seed.w * 9.0), -1.4);
+        vec3 p = seed.xyz * uBox + vel * uTime;
+        p = mod(p - uCam + uBox * 0.5, uBox) - uBox * 0.5 + uCam;
+        vA = step(fract(seed.w * 7.31), uAmount) * smoothstep(uBox.x * 0.5, uBox.x * 0.3, length(p.xz - uCam.xz)) * (1.0 - end * 0.75);
+        p -= normalize(vel) * end * (0.5 + seed.y * 0.5);
+        gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor; varying float vA;
+      void main() {
+        if (vA < 0.02) discard;
+        gl_FragColor = vec4(uColor, vA * 0.5);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, depthWrite: false,
+  });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+  lines.visible = false;
+  return lines;
+}
+
 export function createSky(scene) {
   const fogCol = new THREE.Color(FOG_COLOR);
   scene.background = fogCol.clone();
@@ -452,6 +492,9 @@ export function createSky(scene) {
   // ----- пепел и угольки -----
   const ash = ashField(700, [44, 18, 44]);
   scene.add(ash);
+  const rain = rainField(1500, [36, 24, 36]);
+  scene.add(rain);
+  const rainCold = new THREE.Color(0.5, 0.58, 0.78), rainBlood = new THREE.Color(0.9, 0.24, 0.2);
 
   // ----- молнии: ветвящийся разряд (ломаная лента, строится заново при каждом ударе) -----
   const BOLT_SEG = 64;
@@ -498,11 +541,11 @@ export function createSky(scene) {
   // Каждая величина задана тройкой [обычное, кровавое, рассвет]; сцена плавно перетекает между ними.
   const C = (h) => new THREE.Color(h);
   const PAL = {
-    sun: [C(0xffc896), C(0xff7048), C(0xfff0d8)], sky: [C(0xaab6d4), C(0xb48ca4), C(0xcfe0ff)], ground: [C(0x5c4e52), C(0x5e3038), C(0x8e8072)],
-    fog: [C(FOG_COLOR), C(0x57344a), C(0x7c8eb4)], mid: [C(0x2a3558), C(0x3a1830), C(0x4670b4)], zen: [C(0x0b0e1e), C(0x12050c), C(0x183a7c)],
+    sun: [C(0xffc896), C(0xff8e62), C(0xfff0d8)], sky: [C(0xaab6d4), C(0xb09cb6), C(0xcfe0ff)], ground: [C(0x5c4e52), C(0x5c3c44), C(0x8e8072)],
+    fog: [C(FOG_COLOR), C(0x574058), C(0x7c8eb4)], mid: [C(0x2a3558), C(0x3a1830), C(0x4670b4)], zen: [C(0x0b0e1e), C(0x12050c), C(0x183a7c)],
   };
   const NUM = { sun: [5.6, 5.4, 9.2], hemi: [2.7, 2.5, 3.5], fog: [FOG_DENSITY, FOG_DENSITY * 1.08, FOG_DENSITY * 0.6] };
-  const M = { mood: 0, moodTo: 0, dawn: 0, dawnTo: 0 };
+  const M = { mood: 0, moodTo: 0, dawn: 0, dawnTo: 0, rain: 0 };
   const mixC = (out, a) => out.copy(a[0]).lerp(a[1], M.mood).lerp(a[2], M.dawn);
   const mixN = (a) => (a[0] + (a[1] - a[0]) * M.mood) * (1 - M.dawn) + a[2] * M.dawn;
   const hemiCol = new THREE.Color(), fogBase = new THREE.Color();
@@ -525,6 +568,15 @@ export function createSky(scene) {
     skyMat.uniforms.uTime.value = time;
     ash.material.uniforms.uTime.value = time;
     ash.material.uniforms.uCam.value.copy(camera.position);
+    // гроза: дождь начинается, когда небо багровеет, в ярости босса он кровавый; на рассвете стихает
+    const rainK = Math.max(0, Math.min(1, (M.mood - 0.24) / 0.6)) * (1 - M.dawn);
+    M.rain = rainK;
+    rain.visible = rainK > 0.01;
+    if (rain.visible) {
+      const u = rain.material.uniforms;
+      u.uTime.value = time % 600; u.uCam.value.copy(camera.position); u.uAmount.value = rainK;
+      u.uColor.value.copy(rainCold).lerp(rainBlood, Math.max(0, (M.mood - 0.6) / 0.4)).multiplyScalar(1 + L.flash * 5);
+    }
     for (const s of smokes) s.material.uniforms.uTime.value = time;
     for (const b of beams) b.m.rotation.z = Math.sin(time * 0.13 + b.ph) * 0.55 + Math.sin(time * 0.31 + b.ph * 2.0) * 0.12;
     for (const f of flak) {
@@ -587,6 +639,7 @@ export function createSky(scene) {
     resetMood: () => { M.mood = M.moodTo = 0; M.dawn = M.dawnTo = 0; applyMood(); },
     get dawn() { return M.dawn; },
     get mood() { return M.mood; },
+    get rain() { return M.rain; },
     strike: () => { L.t = 0; },                                    // молния прямо сейчас
     setScale: (h) => { ash.material.uniforms.uScale.value = h * 0.6; },
     setMask: (on) => { skyMat.uniforms.uAlpha.value = on ? 0 : 1; },   // маска неба нужна только постобработке

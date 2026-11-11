@@ -11,7 +11,7 @@ import { Enemies } from './enemies.js';
 import { Pickups } from './pickups.js';
 import { Flow } from './flow.js';
 import { Hud } from './hud.js';
-import { initAudio, sfx, audioSettings, music } from './audio.js';
+import { initAudio, sfx, audioSettings, music, rainLevel } from './audio.js';
 import { loadSprites, loadTextureImages } from './sprites.js';
 import { createSky } from './sky.js';
 import { PostFX } from './postfx.js';
@@ -509,6 +509,8 @@ function frame() {
   if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   camera.updateMatrixWorld();
   G.sky.update(dt, game.time, camera);
+  const rainNow = Math.round((game.state === 'paused' ? 0 : G.sky.rain) * 20) / 20;
+  if (rainNow !== game.rainSnd) { game.rainSnd = rainNow; rainLevel(rainNow); }
   if (game.state === 'playing' || game.state === 'paused') G.weapons.draw(dt, game.time);
   else G.weapons.ctx.clearRect(0, 0, overlay.width, overlay.height);
 
